@@ -97,11 +97,11 @@ de.post(f'{VER}/DataEntry/index.php', form, {'pid': PID, 'id': '1-1', 'event_id'
 DT = sql(f"select data_table from redcap_projects where project_id={PID}")[0][0]
 val = sql(f"select value from {DT} where project_id={PID} and record='1-1' and event_id={E1} and field_name='email_v2' and instance is null")
 check('form save stored new value', val and val[0][0] == 'changed@abc.com', val)
-f = sql(f"select status from cctc_sdv_field where project_id={PID} and record='1-1' and field_name='email_v2' and instance=1")
+f = sql(f"select status from sdv_field where project_id={PID} and record='1-1' and field_name='email_v2' and instance=1")
 check('save hook marked verified field as changed', f and f[0][0] == 'changed', f)
-fm = sql(f"select status, status_reason from cctc_sdv_form where project_id={PID} and record='1-1' and event_id={E1} and instrument='text_validation' and instance=1")
+fm = sql(f"select status, status_reason from sdv_form where project_id={PID} and record='1-1' and event_id={E1} and instrument='text_validation' and instance=1")
 check('save hook set form to reverify (trigger=verified)', fm and fm[0][0] == 'reverify', fm)
-f2 = sql(f"select status from cctc_sdv_field where project_id={PID} and record='1-1' and field_name='ptname_v2' and instance=1")
+f2 = sql(f"select status from sdv_field where project_id={PID} and record='1-1' and field_name='ptname_v2' and instance=1")
 check('unchanged verified field keeps its tick', f2 and f2[0][0] == 'verified', f2)
 
 state, _ = mon.form_page(PID, '1-1', E1, 'text_validation', 1)

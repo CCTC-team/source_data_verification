@@ -4,7 +4,7 @@ namespace CCTC\SourceDataVerificationModule\Classes;
 
 /**
  * Decides whether each field requires SDV. Action tags give the default (flag regex → required,
- * ignore tag → excluded, otherwise optional) and rows in cctc_sdv_plan, set by monitors, override it.
+ * ignore tag → excluded, otherwise optional) and rows in sdv_plan, set by monitors, override it.
  */
 class SdvPlan
 {

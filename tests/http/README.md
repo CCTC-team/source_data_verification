@@ -14,6 +14,7 @@ Requirements: Python 3.10+ (standard library only), the container running on htt
 | `setup_project.py <fixture> <title> [trigger]` | Enables the module, creates a project from `ProjectTypes/<fixture>.xml`, imports data, assigns roles/DAG, configures the module. Writes `pid_<fixture>.txt` |
 | `test_flow.py <pid>` | Full workflow: plan, verify, queries, complete, save-hook and import change detection, DAGs, dashboard, export, Logging (65 checks) |
 | `test_triggers.py <pid>` | Each re-verification trigger mode (10 checks) |
+| `test_concurrency.py <pid> <record> <event_id> [instrument] [instance] [rounds]` | Parallel monitor sessions on one pending form instance: concurrent query raises create one query; a form is never completed while a query raised in parallel is open |
 | `smoke.py <pid>` | Verifies and completes every form instance needing SDV in any project type |
 | `perf_seed.py <pid> <n>` + `perf_seed_activity.sql` | Seeds a large project and equivalent SDV/DRW activity |
 | `bench.py` | Times the module against Monitoring QR's `GetMonitorQueries` (installed temporarily, then dropped) on the project in `pid_perf.txt` |

@@ -17,11 +17,11 @@ dropped (disabling or upgrading the module keeps the full SDV history).
 
 | Table | Holds |
 |---|---|
-| `cctc_sdv_form` | SDV status of each saved form instance (record / event / instrument / instance) |
-| `cctc_sdv_field` | each verified field, with a SHA-256 hash of the value that was verified (no copy of the data) |
-| `cctc_sdv_plan` | fields whose SDV requirement has been changed by a monitor |
-| `cctc_sdv_query`, `cctc_sdv_query_msg` | monitor query threads and their messages |
-| `cctc_sdv_audit` | append-only audit trail of every SDV action |
+| `sdv_form` | SDV status of each saved form instance (record / event / instrument / instance) |
+| `sdv_field` | each verified field, with a SHA-256 hash of the value that was verified (no copy of the data) |
+| `sdv_plan` | fields whose SDV requirement has been changed by a monitor |
+| `sdv_query`, `sdv_query_msg` | monitor query threads and their messages |
+| `sdv_audit` | append-only audit trail of every SDV action |
 
 Tested with REDCap 14.7.0 on MariaDB 10.11 and PHP 8.2. Requires PHP 8.1+.
 
@@ -126,7 +126,7 @@ verified values for changes made outside data entry.
 - Every SDV action is recorded in the project **Logging** page with the record, event and form. Descriptions start
   with `SDV:`, e.g. `SDV: field verified`, `SDV: monitor query raised`, `SDV: form marked SDV complete`,
   `SDV: verified field value changed`, `SDV: plan changed`, `SDV: data exported`.
-- Every action is also written to the append-only `cctc_sdv_audit` table, shown as the form's SDV history.
+- Every action is also written to the append-only `sdv_audit` table, shown as the form's SDV history.
 - Configuration changes go to the module's **View Logs** page.
 
 #### Performance ####

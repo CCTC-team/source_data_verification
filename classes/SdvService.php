@@ -2,8 +2,6 @@
 
 namespace CCTC\SourceDataVerificationModule\Classes;
 
-use Throwable;
-
 /**
  * SDV business rules. Every state-changing action takes a row lock on the form instance, writes the
  * module tables and the module audit table in one transaction, then records a REDCap log event.
@@ -59,19 +57,23 @@ class SdvService
 
     /**
      * Everything about one form instance, read with four indexed queries.
+     * With $forUpdate the form row is locked before anything else is read. Under REPEATABLE READ the
+     * transaction's snapshot is taken at its first plain read, so reading first would return state from
+     * before a concurrent action that committed while this one waited for the lock.
      */
     public function load(FormContext $ctx, bool $forUpdate = false): array
     {
+        $form = $forUpdate ? $this->repo->getFormRow($ctx, true) : null;
+
         $sdvFields = $this->plan->sdvFieldNames($ctx->instrument);
         $completeField = "{$ctx->instrument}_complete";
         $values = $this->repo->readValues($ctx, [...$sdvFields, $completeField]);
         $exists = !empty($values);
 
-        $queries = $this->repo->getQueries($ctx);
         return [
-            'form' => $this->repo->getFormRow($ctx, $forUpdate),
+            'form' => $forUpdate ? $form : $this->repo->getFormRow($ctx),
             'fieldRows' => $this->repo->getFieldRows($ctx),
-            'queries' => $queries,
+            'queries' => $this->repo->getQueries($ctx),
             'values' => $values,
             'hashes' => ValueHasher::hashAll($sdvFields, $values),
             'exists' => $exists,
@@ -95,12 +97,54 @@ class SdvService
      * the form was marked complete). A verified field whose value changed always loses its tick; a
      * complete form drops to 'reverify' when the configured trigger matches one of the changed fields.
      * Runs on save and whenever the form is opened, so imports and API writes are caught too.
+     * $loaded is unlocked state, used only to skip the transaction when nothing changed; the changes are
+     * worked out again under the form row lock before anything is written.
      * @return string[] notices describing what changed
      */
     public function detectChanges(FormContext $ctx, array $loaded, string $user, string $source): array
     {
+        if (!$this->pendingChanges($loaded)['any']) return [];
+
+        $applied = $this->repo->transaction(function () use ($ctx, $user, $source) {
+            $locked = $this->load($ctx, true);
+            $change = $this->pendingChanges($locked);
+            $ts = self::now();
+            $marked = [];
+            foreach ($change['changedVerified'] as $field) {
+                if ($this->repo->markFieldChanged($ctx, $field, $locked['fieldRows'][$field]['value_hash'])) {
+                    $marked[] = $field;
+                    $this->repo->audit($user, $ts, 'field_changed', $ctx, $field, 'verified', 'changed', ['source' => $source]);
+                }
+            }
+            if ($change['reverify']) {
+                $this->repo->updateForm($ctx, ['status' => self::REVERIFY, 'status_reason' => $change['reason'], 'updated_by' => $user, 'updated_at' => $ts]);
+                $this->repo->audit($user, $ts, 'form_reverify', $ctx, null, self::COMPLETE, self::REVERIFY,
+                    ['changed_fields' => $change['candidates'], 'trigger' => $this->settings->trigger(), 'source' => $source]);
+            }
+            return ['marked' => $marked] + $change;
+        });
+
+        $notices = [];
+        if (!empty($applied['marked'])) {
+            $notices[] = 'Value changed since verification: ' . implode(', ', $applied['marked']);
+            $this->logEvent('SDV: verified field value changed', $ctx, ['fields' => implode(', ', $applied['marked']), 'source' => $source]);
+        }
+        if ($applied['reverify']) {
+            $notices[] = $applied['reason'] . '. The form needs re-verification.';
+            $this->logEvent('SDV: form requires re-verification', $ctx, ['fields' => implode(', ', $applied['candidates'])]);
+        }
+        return $notices;
+    }
+
+    /**
+     * Works out which verified fields have changed value and whether a complete form must drop to 'reverify'.
+     * @return array{any:bool, changedVerified:string[], candidates:string[], reverify:bool, reason:?string}
+     */
+    private function pendingChanges(array $loaded): array
+    {
+        $none = ['any' => false, 'changedVerified' => [], 'candidates' => [], 'reverify' => false, 'reason' => null];
         if (!$loaded['exists'] || (empty($loaded['fieldRows']) && ($loaded['form']['status'] ?? null) !== self::COMPLETE)) {
-            return [];
+            return $none;
         }
 
         $changedVerified = [];
@@ -124,43 +168,13 @@ class SdvService
         $reverify = $form && $form['status'] === self::COMPLETE
             && $this->triggerFires($candidates, $changedVerified, $loaded);
 
-        if (empty($changedVerified) && !$reverify) return [];
-
-        $ts = self::now();
-        $notices = [];
-        $marked = [];
-        $this->repo->begin();
-        try {
-            $locked = $this->repo->getFormRow($ctx, true);
-            foreach ($changedVerified as $field) {
-                if ($this->repo->markFieldChanged($ctx, $field, $loaded['fieldRows'][$field]['value_hash'])) {
-                    $marked[] = $field;
-                    $this->repo->audit($user, $ts, 'field_changed', $ctx, $field, 'verified', 'changed', ['source' => $source]);
-                }
-            }
-            if ($reverify && ($locked['status'] ?? null) === self::COMPLETE) {
-                $reason = 'Data changed after SDV: ' . implode(', ', $candidates);
-                $this->repo->updateForm($ctx, ['status' => self::REVERIFY, 'status_reason' => $reason, 'updated_by' => $user, 'updated_at' => $ts]);
-                $this->repo->audit($user, $ts, 'form_reverify', $ctx, null, self::COMPLETE, self::REVERIFY,
-                    ['changed_fields' => $candidates, 'trigger' => $this->settings->trigger(), 'source' => $source]);
-                $notices[] = $reason . '. The form needs re-verification.';
-            } else {
-                $reverify = false;
-            }
-            $this->repo->commit();
-        } catch (Throwable $e) {
-            $this->repo->rollback();
-            throw $e;
-        }
-
-        if (!empty($marked)) {
-            array_unshift($notices, 'Value changed since verification: ' . implode(', ', $marked));
-            $this->logEvent('SDV: verified field value changed', $ctx, ['fields' => implode(', ', $marked), 'source' => $source]);
-        }
-        if ($reverify) {
-            $this->logEvent('SDV: form requires re-verification', $ctx, ['fields' => implode(', ', $candidates)]);
-        }
-        return $notices;
+        return [
+            'any' => !empty($changedVerified) || $reverify,
+            'changedVerified' => $changedVerified,
+            'candidates' => $candidates,
+            'reverify' => $reverify,
+            'reason' => $reverify ? 'Data changed after SDV: ' . implode(', ', $candidates) : null,
+        ];
     }
 
     private function triggerFires(array $candidates, array $changedVerified, array $loaded): bool
@@ -200,20 +214,14 @@ class SdvService
      */
     private function locked(FormContext $ctx, callable $fn)
     {
-        $this->repo->begin();
-        try {
+        return $this->repo->transaction(function () use ($ctx, $fn) {
             $this->repo->ensureFormRow($ctx, self::now());
             $loaded = $this->load($ctx, true);
             if (!$loaded['exists']) {
                 throw new SdvException('Save the form before carrying out SDV.');
             }
-            $result = $fn($loaded);
-            $this->repo->commit();
-            return $result;
-        } catch (Throwable $e) {
-            $this->repo->rollback();
-            throw $e;
-        }
+            return $fn($loaded);
+        });
     }
 
     private static function requireOpenForm(array $loaded): void
@@ -403,16 +411,11 @@ class SdvService
 
         $ts = self::now();
         $new = $override ?? $info['default'];
-        $this->repo->begin();
-        try {
+        $this->repo->transaction(function () use ($field, $override, $user, $ts, $info, $new, $instrument) {
             $this->repo->setPlanOverride($field, $override, $user, $ts);
             $this->repo->audit($user, $ts, 'plan_changed', null, $field, $info['requirement'], $new,
                 ['instrument' => $instrument, 'override' => $override, 'default' => $info['default']]);
-            $this->repo->commit();
-        } catch (Throwable $e) {
-            $this->repo->rollback();
-            throw $e;
-        }
+        });
         $this->logEvent('SDV: plan changed', null, ['field' => $field, 'instrument' => $instrument, 'from' => $info['requirement'], 'to' => $new]);
         return ['requirement' => $new, 'override' => $override] + $info;
     }

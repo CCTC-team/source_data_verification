@@ -3,7 +3,7 @@
 -- so SDV history survives disabling/re-enabling or upgrading the module.
 -- Statements are separated by ';' on their own line end and executed one at a time.
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_form (
+CREATE TABLE IF NOT EXISTS sdv_form (
     project_id    INT NOT NULL,
     record        VARCHAR(100) NOT NULL,
     event_id      INT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS cctc_sdv_form (
     KEY idx_updated (project_id, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_field (
+CREATE TABLE IF NOT EXISTS sdv_field (
     project_id  INT NOT NULL,
     record      VARCHAR(100) NOT NULL,
     event_id    INT NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS cctc_sdv_field (
     KEY idx_status (project_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_plan (
+CREATE TABLE IF NOT EXISTS sdv_plan (
     project_id  INT NOT NULL,
     field_name  VARCHAR(100) NOT NULL,
     requirement VARCHAR(20) NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS cctc_sdv_plan (
     PRIMARY KEY (project_id, field_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_query (
+CREATE TABLE IF NOT EXISTS sdv_query (
     query_id   INT NOT NULL AUTO_INCREMENT,
     project_id INT NOT NULL,
     record     VARCHAR(100) NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS cctc_sdv_query (
     KEY idx_status (project_id, status, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_query_msg (
+CREATE TABLE IF NOT EXISTS sdv_query_msg (
     msg_id        INT NOT NULL AUTO_INCREMENT,
     query_id      INT NOT NULL,
     action        VARCHAR(20) NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS cctc_sdv_query_msg (
     KEY idx_query (query_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS cctc_sdv_audit (
+CREATE TABLE IF NOT EXISTS sdv_audit (
     audit_id   BIGINT NOT NULL AUTO_INCREMENT,
     project_id INT NOT NULL,
     ts         DATETIME NOT NULL,

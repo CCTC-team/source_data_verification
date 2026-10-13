@@ -6,6 +6,7 @@ use ExternalModules\AbstractExternalModule;
 use Throwable;
 
 require_once __DIR__ . '/classes/SdvException.php';
+require_once __DIR__ . '/classes/TransactionConflictException.php';
 require_once __DIR__ . '/classes/Settings.php';
 require_once __DIR__ . '/classes/Roles.php';
 require_once __DIR__ . '/classes/FormContext.php';
@@ -26,7 +27,7 @@ class SourceDataVerificationModule extends AbstractExternalModule
 {
     /*
         See README.md for how this module works.
-        All SDV state lives in the cctc_sdv_* tables (sql/schema.sql); no REDCap core files are modified.
+        All SDV state lives in the sdv_* tables (sql/schema.sql); no REDCap core files are modified.
      */
 
     private const MONITOR_ACTIONS = [
@@ -49,7 +50,7 @@ class SourceDataVerificationModule extends AbstractExternalModule
     {
         $proj = $this->project($projectId);
         $settings = new Settings($this, $projectId);
-        $repo = new Repository($this, (int)$projectId);
+        $repo = new Repository((int)$projectId);
         $plan = new SdvPlan($proj, $settings, $repo);
         return [$settings, $repo, $plan, new SdvService($proj, $settings, $repo, $plan), $proj];
     }

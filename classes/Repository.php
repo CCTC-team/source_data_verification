@@ -2,33 +2,46 @@
 
 namespace CCTC\SourceDataVerificationModule\Classes;
 
-use ExternalModules\AbstractExternalModule;
-
 /**
  * All SQL for the module. Every statement is parameterised and scoped by project_id, and every
  * lookup against the module tables or the REDCap data table goes through an index.
  */
 class Repository
 {
-    public const FORM = 'cctc_sdv_form';
-    public const FIELD = 'cctc_sdv_field';
-    public const PLAN = 'cctc_sdv_plan';
-    public const QUERY = 'cctc_sdv_query';
-    public const MSG = 'cctc_sdv_query_msg';
-    public const AUDIT = 'cctc_sdv_audit';
+    public const FORM = 'sdv_form';
+    public const FIELD = 'sdv_field';
+    public const PLAN = 'sdv_plan';
+    public const QUERY = 'sdv_query';
+    public const MSG = 'sdv_query_msg';
+    public const AUDIT = 'sdv_audit';
 
     private const FORM_KEY = 'project_id = ? and record = ? and event_id = ? and instrument = ? and instance = ?';
 
     private string $dataTable;
 
-    public function __construct(private readonly AbstractExternalModule $module, public readonly int $projectId)
+    public function __construct(public readonly int $projectId)
     {
         $this->dataTable = \REDCap::getDataTable($projectId);
     }
 
+    /**
+     * Runs every statement on the primary database. With a read replica configured, db_query() would send
+     * SELECTs (SELECT ... FOR UPDATE included) to the replica, which cannot lock rows and may lag behind the
+     * user's last action. The framework's query() is not used because it re-runs a deadlocked statement on
+     * its own, after MySQL has already rolled back the rest of the transaction; transaction() retries the
+     * whole unit of work instead.
+     */
     private function q(string $sql, array $params = [])
     {
-        return $this->module->query($sql, $params);
+        $result = db_query($sql, $params, null, MYSQLI_STORE_RESULT, true);
+        if ($result === false) {
+            $code = (int)db_errno();
+            if ($code === 1213 || $code === 1205) {
+                throw new TransactionConflictException(db_error(), $code);
+            }
+            throw new \RuntimeException("SDV database query failed ($code): " . db_error());
+        }
+        return $result;
     }
 
     private function rows(string $sql, array $params = []): array
@@ -46,9 +59,37 @@ class Repository
 
     // ---- transactions ---------------------------------------------------------------------------
 
-    public function begin(): void { db_query('START TRANSACTION'); }
-    public function commit(): void { db_query('COMMIT'); }
-    public function rollback(): void { db_query('ROLLBACK'); }
+    private const MAX_ATTEMPTS = 3;
+
+    /**
+     * Runs $fn in a transaction and returns its result. On a deadlock or lock wait timeout the transaction
+     * is rolled back and $fn runs again from the start, so $fn must only touch the database.
+     */
+    public function transaction(callable $fn)
+    {
+        for ($attempt = 1; ; $attempt++) {
+            $this->q('START TRANSACTION');
+            try {
+                $result = $fn();
+                $this->q('COMMIT');
+                return $result;
+            } catch (TransactionConflictException $e) {
+                $this->rollback();
+                if ($attempt >= self::MAX_ATTEMPTS) {
+                    throw new SdvException('The database was busy and the change was not saved. Please try again.', 0, $e);
+                }
+                usleep(random_int(50, 250) * 1000 * $attempt);
+            } catch (\Throwable $e) {
+                $this->rollback();
+                throw $e;
+            }
+        }
+    }
+
+    private function rollback(): void
+    {
+        db_query('ROLLBACK', [], null, MYSQLI_STORE_RESULT, true);
+    }
 
     // ---- plan -----------------------------------------------------------------------------------
 
@@ -74,10 +115,16 @@ class Repository
 
     // ---- form instance state --------------------------------------------------------------------
 
+    /**
+     * Creates the form row if missing. Inside a transaction this also takes the exclusive row lock: unlike
+     * INSERT IGNORE, which only takes a shared lock on an existing row (two sessions holding it then
+     * deadlock when both upgrade with FOR UPDATE), ON DUPLICATE KEY UPDATE locks the row exclusively.
+     */
     public function ensureFormRow(FormContext $ctx, string $ts): void
     {
-        $this->q('insert ignore into ' . self::FORM . ' (project_id, record, event_id, instrument, instance, status, created_at)
-                  values (?, ?, ?, ?, ?, \'pending\', ?)', [...$ctx->keyParams(), $ts]);
+        $this->q('insert into ' . self::FORM . ' (project_id, record, event_id, instrument, instance, status, created_at)
+                  values (?, ?, ?, ?, ?, \'pending\', ?)
+                  on duplicate key update status = status', [...$ctx->keyParams(), $ts]);
     }
 
     public function getFormRow(FormContext $ctx, bool $forUpdate = false): ?array
@@ -237,7 +284,7 @@ class Repository
 
     /**
      * @param array $flt keys: record, group_id, event_id, instrument, status, open_queries (yes/no), user, from, to
-     * @return array{0:string,1:array} where-clause and params for cctc_sdv_form f
+     * @return array{0:string,1:array} where-clause and params for sdv_form f
      */
     private function formWhere(array $flt): array
     {
