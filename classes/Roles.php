@@ -44,12 +44,25 @@ class Roles
         return $this->isSuperUser || (int)($this->formRights[$instrument] ?? 0) > 0;
     }
 
-    public function canRespond(Settings $settings): bool
+    // Form rights 1 (view & edit) and 3 (edit survey responses) allow editing; 2 is read-only
+    public function canEditForm(string $instrument): bool
     {
-        return $this->isDataEntry || ($this->isDataManager && $settings->dataManagersCanRespond());
+        return $this->isSuperUser || in_array((int)($this->formRights[$instrument] ?? 0), [1, 3], true);
+    }
+
+    public function canRespond(Settings $settings, string $instrument): bool
+    {
+        return ($this->isDataEntry || ($this->isDataManager && $settings->dataManagersCanRespond()))
+            && $this->canEditForm($instrument);
     }
 
     public function canEditPlan(): bool
+    {
+        return $this->isMonitor || $this->isSuperUser;
+    }
+
+    // The project-wide sync changes SDV state on every site's forms, so only monitors run it
+    public function canSync(): bool
     {
         return $this->isMonitor || $this->isSuperUser;
     }

@@ -35,7 +35,11 @@ echo "<p>Track Source Data Verification progress, open monitor queries and compl
 
 if ($forced && $syncResult) {
     echo "<div class='darkgreen' style='max-width: 800px' id='cctc-sdv-sync-result'>Sync complete: {$syncResult['added']} form(s) added, {$syncResult['removed']} removed,
-          {$syncResult['changedForms']} form(s) with verified data changed outside data entry.</div>";
+          {$syncResult['cleared']} cleared because their data was deleted, {$syncResult['changedForms']} form(s) with data changed outside data entry.</div>";
+}
+if ($syncResult && $syncResult['failed']) {
+    echo "<div class='red' style='max-width: 800px' id='cctc-sdv-sync-errors'>" . (int)$syncResult['failed'] . " form(s) could not be synced:<br>"
+        . implode('<br>', array_map('h', $syncResult['errors'])) . "</div>";
 }
 
 // tabs
@@ -46,9 +50,11 @@ foreach (['forms' => 'Forms', 'queries' => 'Queries', 'summary' => 'Summary'] as
 }
 echo "</div>";
 
-echo "<form method='post' style='display:inline; margin-left: 10px' action='" . h($url($keep)) . "'>
-        <button class='btn btn-defaultrc btn-sm' name='sync' value='1' id='cctc-sdv-sync' title='Find newly saved forms and changes made by data import or the API'>
-        <i class='fas fa-sync'></i> Sync now</button></form>";
+if ($roles->canSync()) {
+    echo "<form method='post' style='display:inline; margin-left: 10px' action='" . h($url($keep)) . "'>
+            <button class='btn btn-defaultrc btn-sm' name='sync' value='1' id='cctc-sdv-sync' title='Find newly saved forms, deleted form data and changes made by data import or the API'>
+            <i class='fas fa-sync'></i> Sync now</button></form>";
+}
 
 // ---- filter helpers ------------------------------------------------------------------------------
 

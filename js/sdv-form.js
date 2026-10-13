@@ -357,7 +357,7 @@ var CctcSdvForm = (function () {
     var ACTION_LABELS = {
         field_verified: 'Field verified', field_unverified: 'Field verification removed', field_changed: 'Verified value changed',
         form_status: 'Form status changed', form_complete: 'Form marked SDV complete', form_not_required: 'Form marked SDV not required',
-        form_reopened: 'Form reopened', form_reverify: 'Re-verification required', query_raised: 'Query raised',
+        form_reopened: 'Form reopened', form_reverify: 'Re-verification required', form_state_cleared: 'SDV status cleared (form data deleted)', query_raised: 'Query raised',
         query_responded: 'Query responded', query_reraised: 'Query re-raised', query_accepted: 'Query accepted', query_closed: 'Query closed',
         query_raise_text: 'Query text', query_reraise_text: 'Re-raised query text', query_respond_text: 'Response',
         query_close_text: 'Close reason', query_accept_text: 'Accept note'

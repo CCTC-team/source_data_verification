@@ -62,3 +62,6 @@
 .cctc-sdv-progress { background: #eee; border-radius: 3px; height: 10px; width: 100px; display: inline-block; vertical-align: middle; }
 .cctc-sdv-progress > span { background: #4c9a5c; height: 100%; display: block; border-radius: 3px; }
 .cctc-sdv-pager { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.cctc-sdv-plan-bulk { margin: 6px 0 0; font-size: 12px; }
+.cctc-sdv-plan-bulk label { font-weight: normal; margin: 0; }
+.cctc-sdv-plan-form-select { font-size: 11px; padding: 0 2px; height: 20px; margin-left: 4px; }

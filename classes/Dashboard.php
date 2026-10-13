@@ -110,13 +110,15 @@ class Dashboard
      */
     public function syncIfDue(bool $force): ?array
     {
+        if (!$this->roles->canSync()) return null;
         $last = $this->repo->lastActionTs('sync');
         if (!$force && $last !== null && time() - strtotime($last) < self::SYNC_INTERVAL_SECONDS) return null;
         $result = $this->service->sync($this->roles->username);
         $this->repo->audit($this->roles->username, SdvService::now(), 'sync', null, null, null, null, $result);
-        if ($force || $result['added'] || $result['removed'] || $result['changedForms']) {
-            \REDCap::logEvent('SDV: dashboard sync', "forms added = {$result['added']},\nforms removed = {$result['removed']},\nforms with changed verified data = {$result['changedForms']}",
-                '', null, null, $this->repo->projectId);
+        if ($force || $result['added'] || $result['removed'] || $result['cleared'] || $result['changedForms'] || $result['failed']) {
+            \REDCap::logEvent('SDV: dashboard sync', "forms added = {$result['added']},\nforms removed = {$result['removed']},\n"
+                . "forms cleared after data deletion = {$result['cleared']},\nforms with data changed after SDV = {$result['changedForms']},\n"
+                . "forms that failed = {$result['failed']}", '', null, null, $this->repo->projectId);
         }
         return $result;
     }

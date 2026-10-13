@@ -30,7 +30,7 @@ echo "<p style='max-width: 900px'>The SDV plan sets which fields need Source Dat
     . ". Other fields are <b>optional</b>: monitors may verify them" . ($settings->monitorsOnlyRequired() ? ' (disabled by the project settings)' : '')
     . " but they don't stop a form being marked SDV complete.</p>";
 echo $canEdit
-    ? "<p style='max-width: 900px'>As a monitor you can change a field's requirement below. The change applies to that field on <b>all records</b>
+    ? "<p style='max-width: 900px'>As a monitor you can change a field's requirement below, or set every field on a form at once. The change applies on <b>all records</b>
        and is recorded in the project Logging. Forms already marked SDV complete keep their status.</p>"
     : "<p id='cctc-sdv-plan-readonly'><i>Only monitors can change the SDV plan.</i></p>";
 
@@ -43,8 +43,15 @@ foreach ($proj->forms as $instrument => $info) {
     $totalRequired += $required;
 
     $sections .= "<details class='cctc-sdv-plan-form' style='margin: 6px 0; max-width: 1000px' " . ($required ? 'open' : '') . ">
-        <summary><b>" . h(strip_tags($info['menu'])) . "</b> <small>(" . h($instrument) . ") - $required of " . count($fields) . " field(s) require SDV</small></summary>
-        <table class='cctc-sdv-table' data-instrument='" . h($instrument) . "'><tr>
+        <summary><b>" . h(strip_tags($info['menu'])) . "</b> <small>(" . h($instrument) . ") - <span class='cctc-sdv-plan-count'>$required</span> of " . count($fields) . " field(s) require SDV</small></summary>";
+    if ($canEdit) {
+        $sections .= "<div class='cctc-sdv-plan-bulk'><label>Set all fields on this form to
+            <select class='cctc-sdv-plan-form-select' data-instrument='" . h($instrument) . "' aria-label='SDV requirement for all fields on " . h($instrument) . "'>
+            <option value=''>- choose -</option><option value='default'>Default (from action tags)</option>";
+        foreach (SdvPlan::VALUES as $v) $sections .= "<option value='$v'>" . ucfirst($v) . "</option>";
+        $sections .= "</select></label></div>";
+    }
+    $sections .= "<table class='cctc-sdv-table' data-instrument='" . h($instrument) . "'><tr>
             <th style='width: 22%'>Variable</th><th>Label</th><th style='width: 18%'>Matching action tags</th>
             <th style='width: 10%'>Default</th><th style='width: 17%'>SDV requirement</th></tr>";
     foreach ($fields as $field => $f) {
@@ -95,6 +102,13 @@ if ($canEdit) {
             msg.className = isError ? 'red' : 'darkgreen';
             msg.style.display = 'block';
         }
+        // keep the "x of y field(s) require SDV" count of a form in step with its dropdowns
+        function recount(table) {
+            var n = table.querySelectorAll('select.cctc-sdv-plan-select').length ? 0 : null;
+            table.querySelectorAll('select.cctc-sdv-plan-select').forEach(function (s) { if (s.value === 'required') n++; });
+            var count = table.closest('details').querySelector('.cctc-sdv-plan-count');
+            if (count && n !== null) count.textContent = n;
+        }
         document.querySelectorAll('select.cctc-sdv-plan-select').forEach(function (sel) {
             sel.addEventListener('change', function () {
                 var field = sel.getAttribute('data-field');
@@ -113,10 +127,46 @@ if ($canEdit) {
                     }
                     sel.setAttribute('data-current', resp.field.requirement);
                     sel.value = resp.field.requirement;
+                    recount(sel.closest('table'));
                     show('SDV requirement of ' + field + ' set to ' + resp.field.requirement + '.', false);
                 }).catch(function (err) {
                     sel.disabled = false;
                     sel.value = previous;
+                    show('The change could not be saved: ' + err, true);
+                });
+            });
+        });
+        document.querySelectorAll('select.cctc-sdv-plan-form-select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                var instrument = sel.getAttribute('data-instrument');
+                var requirement = sel.value;
+                if (!requirement) return;
+                var table = document.querySelector('table.cctc-sdv-table[data-instrument="' + instrument + '"]');
+                var n = table.querySelectorAll('select.cctc-sdv-plan-select').length;
+                var label = requirement === 'default' ? 'their default (from action tags)' : '"' + requirement + '"';
+                if (!confirm('Set the SDV requirement of all ' + n + ' field(s) on "' + instrument + '" to ' + label + ' on ALL records?')) {
+                    sel.value = '';
+                    return;
+                }
+                sel.disabled = true;
+                module.ajax('setPlanForm', { instrument: instrument, requirement: requirement }).then(function (resp) {
+                    sel.disabled = false;
+                    sel.value = '';
+                    if (!resp || !resp.ok) {
+                        show((resp && resp.error) || 'The change could not be saved.', true);
+                        return;
+                    }
+                    Object.keys(resp.fields).forEach(function (field) {
+                        var fieldSel = table.querySelector('select.cctc-sdv-plan-select[data-field="' + field + '"]');
+                        if (!fieldSel) return;
+                        fieldSel.value = resp.fields[field].requirement;
+                        fieldSel.setAttribute('data-current', resp.fields[field].requirement);
+                    });
+                    recount(table);
+                    show('All fields on ' + instrument + ' set to ' + (requirement === 'default' ? 'their default' : requirement) + '.', false);
+                }).catch(function (err) {
+                    sel.disabled = false;
+                    sel.value = '';
                     show('The change could not be saved: ' + err, true);
                 });
             });

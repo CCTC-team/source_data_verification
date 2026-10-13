@@ -124,13 +124,12 @@ class SourceDataVerificationModule extends AbstractExternalModule
         if (empty($plan->sdvFieldNames($instrument))) return;
 
         $ctx = FormContext::fromInput($proj, $record, $eventId, $instrument, $instance);
-        $loaded = $service->load($ctx);
-        $notices = $service->detectChanges($ctx, $loaded, $roles->username, 'form opened');
+        [$loaded, $notices] = $service->checkForm($ctx, $roles->username, 'form opened');
         $needsRow = $loaded['exists'] && $loaded['form'] === null && !empty($plan->requiredFields($instrument));
         if ($needsRow) {
             $repo->ensureFormRow($ctx, SdvService::now());
         }
-        if (!empty($notices) || $needsRow) {
+        if ($needsRow) {
             $loaded = $service->load($ctx);
         }
 
@@ -207,6 +206,14 @@ class SourceDataVerificationModule extends AbstractExternalModule
                 return $result;
             }
 
+            if ($action === 'setPlanForm') {
+                if (!$roles->canEditPlan()) throw new SdvException('Only monitors can change which fields require SDV.');
+                $infos = $service->setPlanForInstrument((string)($payload['instrument'] ?? ''), (string)($payload['requirement'] ?? ''), $user);
+                return ['ok' => true, 'fields' => array_map(fn($i) => [
+                    'requirement' => $i['requirement'], 'override' => $i['override'], 'default' => $i['default'],
+                ], $infos)];
+            }
+
             if (in_array($action, self::QUERY_ACTIONS, true)) {
                 [, $ctx] = $service->queryContext((int)($payload['queryId'] ?? 0));
             } else {
@@ -247,7 +254,7 @@ class SourceDataVerificationModule extends AbstractExternalModule
                     $message = 'Query raised.';
                     break;
                 case 'respondQuery':
-                    if (!$roles->canRespond($settings)) throw new SdvException('You are not permitted to respond to monitor queries.');
+                    if (!$roles->canRespond($settings, $ctx->instrument)) throw new SdvException('You are not permitted to respond to monitor queries.');
                     $service->respondQuery($ctx, (int)$payload['queryId'], (string)($payload['code'] ?? ''), $payload['comment'] ?? null, $user);
                     $message = 'Response sent.';
                     break;
@@ -267,9 +274,7 @@ class SourceDataVerificationModule extends AbstractExternalModule
                     throw new SdvException('Unknown action.');
             }
 
-            $loaded = $service->load($ctx);
-            $notices = $action === 'state' ? $service->detectChanges($ctx, $loaded, $user, 'form opened') : [];
-            if (!empty($notices)) $loaded = $service->load($ctx);
+            [$loaded, $notices] = $action === 'state' ? $service->checkForm($ctx, $user, 'form opened') : [$service->load($ctx), []];
             return ['ok' => true, 'message' => $message, 'state' => $service->buildState($ctx, $roles, $loaded, $notices)];
 
         } catch (SdvException|\InvalidArgumentException $e) {

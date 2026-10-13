@@ -133,6 +133,13 @@ class Repository
         return $rows[0] ?? null;
     }
 
+    public function deleteFormState(FormContext $ctx): void
+    {
+        $this->q('delete from ' . self::FIELD . ' where project_id = ? and record = ? and event_id = ? and instance = ? and instrument = ?',
+            [$ctx->projectId, $ctx->record, $ctx->eventId, $ctx->instance, $ctx->instrument]);
+        $this->q('delete from ' . self::FORM . ' where ' . self::FORM_KEY, $ctx->keyParams());
+    }
+
     public function updateForm(FormContext $ctx, array $cols): void
     {
         $sets = implode(', ', array_map(fn($c) => "$c = ?", array_keys($cols)));
@@ -263,6 +270,48 @@ class Repository
             $out[$r['field_name']][] = (string)$r['value'];
         }
         return $out;
+    }
+
+    /**
+     * Time (YYYYMMDDHHMMSS) REDCap last deleted this form instance's data, from the project log (project_id, pk
+     * index). Two kinds of entry count:
+     * - deleting the record (event DELETE). With several arms the logged SQL restricts the delete with
+     *   "event_id IN (...)", which tells whether this form's event was included;
+     * - deleting the form or event instance (an UPDATE that blanks <instrument>_complete, which a normal save
+     *   never does). Instances above 1 are logged with an "[instance = n]" prefix.
+     */
+    public function lastDeletionTs(FormContext $ctx): ?int
+    {
+        $completeBlanked = '%' . addcslashes("{$ctx->instrument}_complete = ''", '%_\\') . '%';
+        $rows = $this->rows('select ts, event, data_values, sql_log from ' . \Logging::getLogEventTable($this->projectId) . "
+                where project_id = ? and pk = ? and object_type = 'redcap_data'
+                  and (event = 'DELETE' or (event = 'UPDATE' and event_id = ? and data_values like ?))
+                order by ts desc", [$this->projectId, $ctx->record, $ctx->eventId, $completeBlanked]);
+        foreach ($rows as $r) {
+            if ($r['event'] === 'DELETE') {
+                if (!preg_match('/DELETE FROM redcap_data\d*\s+WHERE[^;]*?event_id IN \(([^)]*)\)/i', (string)$r['sql_log'], $m)
+                    || in_array((string)$ctx->eventId, array_map(fn($v) => trim($v, " '\""), explode(',', $m[1])), true)) {
+                    return (int)$r['ts'];
+                }
+            } elseif (preg_match('/^\[instance = (\d+)\]/', (string)$r['data_values'], $m) ? (int)$m[1] === $ctx->instance : $ctx->instance === 1) {
+                return (int)$r['ts'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Records with a REDCap deletion (record, form or event instance) logged at or after $sinceTs.
+     * Uses the log table's (project_id, ts) index.
+     * @return string[]
+     */
+    public function recordsWithDeletionsSince(int $sinceTs): array
+    {
+        $rows = $this->rows('select distinct pk from ' . \Logging::getLogEventTable($this->projectId) . "
+                where project_id = ? and ts >= ? and object_type = 'redcap_data'
+                  and (event = 'DELETE' or (event = 'UPDATE' and data_values like ?))",
+            [$this->projectId, $sinceTs, '%' . addcslashes("_complete = ''", '%_\\') . '%']);
+        return array_column($rows, 'pk');
     }
 
     public function recordGroupId(string $record): ?int
@@ -443,6 +492,49 @@ class Repository
                                       and coalesce(d.instance, 1) = f.instance))";
         $this->q($sql, [$this->projectId, ...$instrumentsRequiringSdv]);
         return db_affected_rows();
+    }
+
+    /**
+     * Form rows with SDV activity whose form data no longer exists (the record, form or event instance was
+     * deleted). Untouched pending rows are left to prunePendingForms().
+     */
+    public function formsWithoutData(): array
+    {
+        return $this->rows('select f.record, f.event_id, f.instrument, f.instance from ' . self::FORM . " f
+                where f.project_id = ? and not (f.status = 'pending' and f.updated_at is null)
+                  and not exists (select 1 from {$this->dataTable} d where d.project_id = f.project_id and d.record = f.record
+                                  and d.field_name = concat(f.instrument, '_complete') and d.event_id = f.event_id
+                                  and coalesce(d.instance, 1) = f.instance)", [$this->projectId]);
+    }
+
+    public function formKeysForRecords(array $records): array
+    {
+        if (empty($records)) return [];
+        return $this->rows('select record, event_id, instrument, instance, created_at from ' . self::FORM .
+            ' where project_id = ? and record in (' . self::in($records) . ')', [$this->projectId, ...$records]);
+    }
+
+    public function earliestFormCreatedAt(): ?string
+    {
+        return $this->rows('select min(created_at) t from ' . self::FORM . ' where project_id = ?', [$this->projectId])[0]['t'] ?? null;
+    }
+
+    /**
+     * Completion snapshots of the 'complete' instances of one instrument, with the current raw values of its
+     * SDV fields, so changes to fields that were never verified can be found in bulk.
+     * @return array{0: array[], 1: array[]} [form rows with snapshot, value rows]
+     */
+    public function completeFormsWithValues(string $instrument, array $fields): array
+    {
+        $forms = $this->rows('select record, event_id, instance, snapshot from ' . self::FORM . "
+                where project_id = ? and instrument = ? and status = 'complete'", [$this->projectId, $instrument]);
+        if (empty($forms) || empty($fields)) return [$forms, []];
+        $values = $this->rows("select f.record, f.event_id, f.instance, d.field_name, d.value
+                from " . self::FORM . " f
+                join {$this->dataTable} d on d.project_id = f.project_id and d.record = f.record and d.event_id = f.event_id
+                     and coalesce(d.instance, 1) = f.instance and d.field_name in (" . self::in($fields) . ")
+                where f.project_id = ? and f.instrument = ? and f.status = 'complete'", [...$fields, $this->projectId, $instrument]);
+        return [$forms, $values];
     }
 
     /**

@@ -81,6 +81,24 @@ class SdvService
         ];
     }
 
+    /**
+     * Loads a form instance for display or after a save: clears SDV state left over from data that has since
+     * been deleted, then runs change detection.
+     * @return array{0: array, 1: string[]} [loaded state, notices]
+     */
+    public function checkForm(FormContext $ctx, string $user, string $source): array
+    {
+        $loaded = $this->load($ctx);
+        $notices = [];
+        if ($this->isStale($ctx, $loaded) && $this->clearStaleState($ctx, $user, $source)) {
+            $notices[] = 'The SDV status of this form was reset because its data was deleted after SDV started.';
+            $loaded = $this->load($ctx);
+        }
+        $changes = $this->detectChanges($ctx, $loaded, $user, $source);
+        if (!empty($changes)) $loaded = $this->load($ctx);
+        return [$loaded, [...$notices, ...$changes]];
+    }
+
     private static function activeQueryByField(array $queries): array
     {
         $out = [];
@@ -88,6 +106,64 @@ class SdvService
             if ($q['status'] !== self::QUERY_CLOSED) $out[$q['field_name']] = $q;
         }
         return $out;
+    }
+
+    // ---- deleted form data ----------------------------------------------------------------------
+
+    private static function hasActivity(array $loaded): bool
+    {
+        $form = $loaded['form'];
+        return ($form !== null && !($form['status'] === self::PENDING && $form['updated_at'] === null))
+            || !empty($loaded['fieldRows'])
+            || !empty(self::activeQueryByField($loaded['queries']));
+    }
+
+    /**
+     * True when the SDV state belongs to form data that no longer exists, or to data deleted after the state
+     * was created (so a re-created record or form does not inherit the old verification).
+     */
+    private function isStale(FormContext $ctx, array $loaded): bool
+    {
+        if (!self::hasActivity($loaded)) return false;
+        if (!$loaded['exists']) return true;
+        if ($loaded['form'] === null) return false;
+        // log times have one-second resolution, so a deletion in the same second as the row's creation counts
+        $deleted = $this->repo->lastDeletionTs($ctx);
+        return $deleted !== null && $deleted >= (int)date('YmdHis', strtotime($loaded['form']['created_at']));
+    }
+
+    /**
+     * Removes the form's SDV status and verified fields and closes its active queries, keeping the query
+     * threads and the audit trail. Re-checked under the form row lock. Returns false if nothing was stale.
+     */
+    public function clearStaleState(FormContext $ctx, string $user, string $source): bool
+    {
+        $cleared = $this->repo->transaction(function () use ($ctx, $user, $source) {
+            $loaded = $this->load($ctx, true);
+            if (!$this->isStale($ctx, $loaded)) return null;
+            $ts = self::now();
+            $closed = [];
+            foreach (self::activeQueryByField($loaded['queries']) as $q) {
+                $this->repo->setQueryStatus((int)$q['query_id'], self::QUERY_CLOSED, $ts);
+                $this->repo->insertMessage((int)$q['query_id'], 'close', null, 'Closed: the form data was deleted', $user, $ts);
+                $this->repo->audit($user, $ts, 'query_closed', $ctx, $q['field_name'], $q['status'], self::QUERY_CLOSED, ['query_id' => (int)$q['query_id']]);
+                $closed[] = $q['field_name'];
+            }
+            $old = $loaded['form']['status'] ?? null;
+            $this->repo->deleteFormState($ctx);
+            $detail = ['source' => $source, 'verified_fields' => array_keys($loaded['fieldRows']), 'closed_queries' => $closed];
+            $this->repo->audit($user, $ts, 'form_state_cleared', $ctx, null, $old, null, $detail);
+            return ['old' => $old] + $detail;
+        });
+        if ($cleared === null) return false;
+
+        $this->logEvent('SDV: status cleared after form data was deleted', $ctx, [
+            'previous status' => $cleared['old'] ?? '',
+            'verified fields' => implode(', ', $cleared['verified_fields']),
+            'closed queries' => implode(', ', $cleared['closed_queries']),
+            'source' => $source,
+        ]);
+        return true;
     }
 
     // ---- change detection -----------------------------------------------------------------------
@@ -199,12 +275,10 @@ class SdvService
      */
     public function onSave(FormContext $ctx, string $user): void
     {
-        $loaded = $this->load($ctx);
-        if (!$loaded['exists']) return;
-        if ($loaded['form'] === null && !empty($this->plan->requiredFields($ctx->instrument))) {
+        [$loaded] = $this->checkForm($ctx, $user, 'data entry save');
+        if ($loaded['exists'] && $loaded['form'] === null && !empty($this->plan->requiredFields($ctx->instrument))) {
             $this->repo->ensureFormRow($ctx, self::now());
         }
-        $this->detectChanges($ctx, $loaded, $user, 'data entry save');
     }
 
     // ---- actions --------------------------------------------------------------------------------
@@ -402,22 +476,64 @@ class SdvService
         if ($instrument === null || !in_array($field, $this->plan->sdvFieldNames($instrument), true)) {
             throw new SdvException("Field '$field' cannot take part in SDV.");
         }
+        [$infos, $changed] = $this->applyPlan($instrument, [$field], $requirement, $user);
+        if (!empty($changed)) {
+            $this->logEvent('SDV: plan changed', null, ['field' => $field, 'instrument' => $instrument,
+                'from' => $changed[$field], 'to' => $infos[$field]['requirement']]);
+        }
+        return $infos[$field];
+    }
+
+    /**
+     * Sets the SDV requirement of every field on an instrument project-wide, as one change.
+     * @return array<string, array> field => updated plan entry
+     */
+    public function setPlanForInstrument(string $instrument, string $requirement, string $user): array
+    {
+        $fields = isset($this->proj->forms[$instrument]) ? $this->plan->sdvFieldNames($instrument) : [];
+        if (empty($fields)) throw new SdvException("Form '$instrument' has no fields that can take part in SDV.");
+        [$infos, $changed] = $this->applyPlan($instrument, $fields, $requirement, $user);
+        if (!empty($changed)) {
+            $this->logEvent('SDV: plan changed for whole form', null, [
+                'instrument' => $instrument,
+                'to' => $requirement === 'default' ? 'default (from action tags)' : $requirement,
+                'fields' => implode(', ', array_map(fn($f, $from) => "$f ($from -> {$infos[$f]['requirement']})", array_keys($changed), $changed)),
+            ]);
+        }
+        return $infos;
+    }
+
+    /**
+     * Stores the overrides for the given fields of one instrument in one transaction, auditing each field that
+     * changes. 'default' removes the override so the action tags decide.
+     * @return array{0: array<string, array>, 1: array<string, string>} [field => updated plan entry, changed field => old requirement]
+     */
+    private function applyPlan(string $instrument, array $fields, string $requirement, string $user): array
+    {
         if ($requirement !== 'default' && !in_array($requirement, SdvPlan::VALUES, true)) {
             throw new SdvException('Invalid requirement.');
         }
-        $info = $this->plan->forInstrument($instrument)[$field];
-        $override = ($requirement === 'default' || $requirement === $info['default']) ? null : $requirement;
-        if ($override === $info['override']) return $info;
+        $current = $this->plan->forInstrument($instrument);
+        $infos = $changes = [];
+        foreach ($fields as $field) {
+            $info = $current[$field];
+            $override = ($requirement === 'default' || $requirement === $info['default']) ? null : $requirement;
+            $infos[$field] = ['requirement' => $override ?? $info['default'], 'override' => $override] + $info;
+            if ($override !== $info['override']) $changes[$field] = $info;
+        }
+        if (empty($changes)) return [$infos, []];
 
         $ts = self::now();
-        $new = $override ?? $info['default'];
-        $this->repo->transaction(function () use ($field, $override, $user, $ts, $info, $new, $instrument) {
-            $this->repo->setPlanOverride($field, $override, $user, $ts);
-            $this->repo->audit($user, $ts, 'plan_changed', null, $field, $info['requirement'], $new,
-                ['instrument' => $instrument, 'override' => $override, 'default' => $info['default']]);
+        $formLevel = count($fields) > 1;
+        $this->repo->transaction(function () use ($changes, $infos, $instrument, $user, $ts, $formLevel) {
+            foreach ($changes as $field => $info) {
+                $override = $infos[$field]['override'];
+                $this->repo->setPlanOverride($field, $override, $user, $ts);
+                $this->repo->audit($user, $ts, 'plan_changed', null, $field, $info['requirement'], $infos[$field]['requirement'],
+                    ['instrument' => $instrument, 'override' => $override, 'default' => $info['default']] + ($formLevel ? ['whole_form' => true] : []));
+            }
         });
-        $this->logEvent('SDV: plan changed', null, ['field' => $field, 'instrument' => $instrument, 'from' => $info['requirement'], 'to' => $new]);
-        return ['requirement' => $new, 'override' => $override] + $info;
+        return [$infos, array_map(fn($i) => $i['requirement'], $changes)];
     }
 
     public function raiseQuery(FormContext $ctx, string $field, ?string $text, string $user): void
@@ -526,17 +642,60 @@ class SdvService
     // ---- bulk sync (dashboard) ------------------------------------------------------------------
 
     /**
-     * Brings the dashboard up to date: adds pending rows for saved forms that need SDV, prunes untouched
-     * rows that no longer apply, and detects changes made to verified fields outside data entry.
-     * @return array{added:int, removed:int, changedForms:int}
+     * Brings the dashboard up to date: prunes untouched rows that no longer apply, clears SDV state of deleted
+     * form data, adds pending rows for saved forms that need SDV, and detects changes made outside data entry
+     * (to verified fields, and to any SDV field of a complete form when the trigger looks beyond verified fields).
+     * A failure on one form is recorded and the sync carries on with the rest.
+     * @return array{added:int, removed:int, cleared:int, changedForms:int, failed:int, errors:string[]}
      */
     public function sync(string $user): array
     {
         $instruments = $this->plan->instrumentsRequiringSdv();
         $ts = self::now();
-        $added = $this->repo->backfillForms($instruments, $ts);
-        $removed = $this->repo->prunePendingForms($instruments);
+        $result = ['added' => 0, 'removed' => 0, 'cleared' => 0, 'changedForms' => 0, 'failed' => 0, 'errors' => []];
+        $result['removed'] = $this->repo->prunePendingForms($instruments);
 
+        $each = function (array $keys, callable $fn) use (&$result) {
+            foreach ($keys as $r) {
+                $ctx = new FormContext($this->repo->projectId, $r['record'], (int)$r['event_id'], $r['instrument'], (int)$r['instance']);
+                try {
+                    $fn($ctx);
+                } catch (\Throwable $e) {
+                    $result['failed']++;
+                    if (count($result['errors']) < 5) $result['errors'][] = "{$ctx->record} / {$ctx->instrument}: " . $e->getMessage();
+                }
+            }
+        };
+
+        $each($this->staleCandidates(), function (FormContext $ctx) use ($user, &$result) {
+            if ($this->clearStaleState($ctx, $user, 'dashboard sync')) $result['cleared']++;
+        });
+        $result['added'] = $this->repo->backfillForms($instruments, $ts);
+
+        $affected = $this->formsWithChangedVerifiedFields() + $this->completeFormsWithChangedSnapshot();
+        $each(array_values($affected), function (FormContext $ctx) use ($user, &$result) {
+            if (!empty($this->detectChanges($ctx, $this->load($ctx), $user, 'dashboard sync'))) $result['changedForms']++;
+        });
+        return $result;
+    }
+
+    // Form instances whose data is gone, plus those of records with a deletion logged since the oldest form row
+    private function staleCandidates(): array
+    {
+        $out = [];
+        $key = fn($r) => implode("\x1f", [$r['record'], $r['event_id'], $r['instrument'], $r['instance']]);
+        foreach ($this->repo->formsWithoutData() as $r) $out[$key($r)] = $r;
+        $since = $this->repo->earliestFormCreatedAt();
+        if ($since !== null) {
+            $records = $this->repo->recordsWithDeletionsSince((int)date('YmdHis', strtotime($since)));
+            foreach ($this->repo->formKeysForRecords($records) as $r) $out[$key($r)] = $r;
+        }
+        return array_values($out);
+    }
+
+    /** @return array<string, array> form key => row, for forms with a verified field whose value changed */
+    private function formsWithChangedVerifiedFields(): array
+    {
         // group current values per verified field, then compare hashes
         $byField = [];
         foreach ($this->repo->verifiedFieldValues() as $r) {
@@ -551,11 +710,38 @@ class SdvService
                 $affected[implode("\x1f", [$r['record'], $r['event_id'], $r['instrument'], $r['instance']])] = $r;
             }
         }
-        foreach ($affected as $r) {
-            $ctx = new FormContext($this->repo->projectId, $r['record'], (int)$r['event_id'], $r['instrument'], (int)$r['instance']);
-            $this->detectChanges($ctx, $this->load($ctx), $user, 'dashboard sync');
+        return $affected;
+    }
+
+    /**
+     * Complete forms where any SDV field differs from the completion snapshot. Only needed when the trigger
+     * can fire on fields that were not verified; otherwise the verified-field check covers every case.
+     * @return array<string, array> form key => row
+     */
+    private function completeFormsWithChangedSnapshot(): array
+    {
+        if (in_array($this->settings->trigger(), ['never', 'verified'], true)) return [];
+        $affected = [];
+        $blank = ValueHasher::hash([]);
+        foreach ($this->plan->instrumentsRequiringSdv() as $instrument) {
+            $fields = $this->plan->sdvFieldNames($instrument);
+            [$forms, $valueRows] = $this->repo->completeFormsWithValues($instrument, $fields);
+            $values = [];
+            foreach ($valueRows as $v) {
+                $values["{$v['record']}\x1f{$v['event_id']}\x1f{$v['instance']}"][$v['field_name']][] = (string)$v['value'];
+            }
+            foreach ($forms as $f) {
+                $k = "{$f['record']}\x1f{$f['event_id']}\x1f{$f['instance']}";
+                $snapshot = json_decode((string)$f['snapshot'], true) ?: [];
+                foreach (ValueHasher::hashAll($fields, $values[$k] ?? []) as $field => $hash) {
+                    if (($snapshot[$field] ?? $blank) !== $hash) {
+                        $affected["{$f['record']}\x1f{$f['event_id']}\x1f$instrument\x1f{$f['instance']}"] = $f + ['instrument' => $instrument];
+                        break;
+                    }
+                }
+            }
         }
-        return ['added' => $added, 'removed' => $removed, 'changedForms' => count($affected)];
+        return $affected;
     }
 
     // ---- presentation ---------------------------------------------------------------------------
@@ -656,7 +842,7 @@ class SdvService
                 'monitor' => $roles->isMonitor,
                 'dataEntry' => $roles->isDataEntry,
                 'dataManager' => $roles->isDataManager,
-                'canRespond' => $roles->canRespond($this->settings),
+                'canRespond' => $roles->canRespond($this->settings, $ctx->instrument),
                 'canEditPlan' => $roles->canEditPlan(),
             ],
             'form' => [

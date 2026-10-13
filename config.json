@@ -39,6 +39,7 @@
     "markNotRequired",
     "reopenForm",
     "setPlan",
+    "setPlanForm",
     "raiseQuery",
     "respondQuery",
     "reraiseQuery",

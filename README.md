@@ -59,6 +59,14 @@ Monitors can override any field's requirement for **all records**, either on the
 requirement dropdown in the field's SDV badge on the data entry form. Overrides are audited, logged, and listed under
 *Recent SDV plan changes*. The record ID field, descriptive fields and the form status field never take part in SDV.
 
+On the SDV Plan page, **Set all fields on this form to** gives every field on a form the same requirement in one step,
+for example to fully verify an eligibility form or to switch SDV off for a whole form.
+- *Required*, *Optional* and *Excluded* store an override on each field, including fields with the ignore tag. After
+  that, changing those fields' action tags in the Online Designer has no effect.
+- *Default (from action tags)* removes the form's overrides, so the action tags decide again.
+- One audit entry is written per field that changes, and one Logging entry for the whole change
+  (`SDV: plan changed for whole form`).
+
 #### Workflow on the data entry form ####
 
 Under each field label the module shows an SDV badge: *SDV required*, *SDV verified*, *Changed since SDV*, *Query
@@ -85,7 +93,8 @@ Rules:
 - Monitor queries: monitor **raises** → site **responds** with one of *Value updated as per source*, *Value correct as
   per source*, *Value correct, error in source updated*, *Missing data not done* (plus an optional comment) → monitor
   **accepts** (optionally verifying the field), **re-raises** (optionally with new text) or **closes** the query.
-  There is one active query per field at a time.
+  There is one active query per field at a time. Responding needs edit rights to the form (*View & Edit* or
+  *Edit survey responses*); users with read-only rights to a form see its queries but cannot respond.
 
 #### Data changes after verification ####
 
@@ -107,6 +116,17 @@ Changes are detected:
 - when the form is next opened;
 - in bulk by the dashboard's sync, which catches data import and API changes without the form being opened.
 
+#### Deleted form data ####
+
+SDV status belongs to the data that was verified. If a record, form or repeating instance is deleted, its SDV status
+and verified fields are cleared and its active queries are closed. The query threads and the SDV history are kept. A
+record or form that is later re-created starts again at *SDV pending*. Deletions are found:
+
+- when the form is next opened or saved, from the project log (REDCap has no hook for deleting a record);
+- by the dashboard's sync.
+
+Each clearance is logged as `SDV: status cleared after form data was deleted`.
+
 #### SDV Dashboard ####
 
 - **Forms tab** — every saved form instance that needs SDV, with SDV status, required fields verified, active queries
@@ -117,9 +137,18 @@ Changes are detected:
 - **Summary tab** — counts per form and status, per site, with % done (complete or not required). Counts link to the
   filtered forms list.
 
-The dashboard syncs automatically when opened, at most every 5 minutes. **Sync now** forces it. A sync adds forms saved
-since the last sync, removes untouched entries for forms that no longer need SDV or no longer exist, and re-checks
-verified values for changes made outside data entry.
+When a monitor opens the dashboard, it syncs automatically, at most every 5 minutes. **Sync now**, shown only to
+monitors, forces a sync. Other roles see the results of the last sync.
+
+A sync does the following:
+
+- adds forms saved since the last sync;
+- removes untouched entries for forms that no longer need SDV;
+- clears the SDV status of deleted form data;
+- re-checks verified values, and the fields of complete forms when the trigger looks beyond verified fields, for
+  changes made outside data entry.
+
+If one form fails, the sync carries on with the rest and lists the failures.
 
 #### Logging and audit trail ####
 
