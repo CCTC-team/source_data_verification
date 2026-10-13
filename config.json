@@ -1,0 +1,157 @@
+{
+  "name": "Source Data Verification",
+  "description": "Field- and form-level Source Data Verification (SDV) for clinical trials. Monitors mark which fields require SDV, tick fields as verified, raise and resolve monitor queries with sites, and mark forms as SDV complete. State is held in dedicated indexed tables, independent of the Data Resolution Workflow.",
+  "namespace": "CCTC\\SourceDataVerificationModule",
+  "framework-version": 16,
+  "documentation": "README.md",
+  "authors": [
+    {
+      "name": "Mintoo Xavier",
+      "email": "mintoo.xavier1@nhs.net",
+      "institution": "Cambridge University Hospital - Cambridge Cancer Trials Centre"
+    }
+  ],
+  "links": {
+    "project": [
+      {
+        "name": "SDV Dashboard",
+        "key": "sdv-dashboard",
+        "icon": "fas fa-clipboard-check",
+        "url": "dashboard.php",
+        "show-header-and-footer": true
+      },
+      {
+        "name": "SDV Plan",
+        "key": "sdv-plan",
+        "icon": "fas fa-list-check",
+        "url": "plan.php",
+        "show-header-and-footer": true
+      }
+    ]
+  },
+  "auth-ajax-actions": [
+    "state",
+    "history",
+    "verifyField",
+    "unverifyField",
+    "verifyAllRequired",
+    "completeForm",
+    "markNotRequired",
+    "reopenForm",
+    "setPlan",
+    "raiseQuery",
+    "respondQuery",
+    "reraiseQuery",
+    "acceptQuery",
+    "closeQuery"
+  ],
+  "project-settings": [
+    {
+      "key": "monitor-roles",
+      "name": "Monitor role(s). Monitors mark fields as requiring SDV, verify fields, raise queries and mark forms SDV complete",
+      "type": "user-role-list",
+      "repeatable": true,
+      "required": true,
+      "super-users-only": true
+    },
+    {
+      "key": "data-entry-roles",
+      "name": "Data entry role(s). Data entry users respond to monitor queries",
+      "type": "user-role-list",
+      "repeatable": true,
+      "required": true,
+      "super-users-only": true
+    },
+    {
+      "key": "data-manager-roles",
+      "name": "Data manager role(s). Data managers can view SDV status and queries",
+      "type": "user-role-list",
+      "repeatable": true,
+      "required": false,
+      "super-users-only": true
+    },
+    {
+      "key": "sdv-flag-regex",
+      "name": "Regex matching the action tags of fields that require SDV, e.g. @SDV or @ENDPOINT-[A-Z]+. Do NOT include the surrounding /. Defaults to @SDV when blank",
+      "type": "text",
+      "required": false,
+      "super-users-only": true
+    },
+    {
+      "key": "sdv-ignore-action-tag",
+      "name": "Action tag that excludes a field from SDV entirely, e.g. @SDV-IGNORE",
+      "type": "text",
+      "required": false,
+      "super-users-only": true
+    },
+    {
+      "key": "monitors-only-required-fields",
+      "name": "Monitors can only verify and query fields that require SDV",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "trigger-reverification",
+      "name": "A form marked 'SDV complete' is set back to 'Re-verification required' when its data changes and",
+      "type": "dropdown",
+      "required": true,
+      "super-users-only": true,
+      "choices": [
+        { "value": "verified", "name": "the changed field had been verified (recommended)" },
+        { "value": "always", "name": "any field on the form changed" },
+        { "value": "required", "name": "the changed field requires SDV" },
+        { "value": "previously_queried", "name": "the changed field has been queried before" },
+        { "value": "previously_queried_or_required", "name": "the changed field has been queried before or requires SDV" },
+        { "value": "never", "name": "never (verified fields still lose their tick)" }
+      ]
+    },
+    {
+      "key": "allow-data-managers-to-respond",
+      "name": "Data managers can also respond to monitor queries",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "monitor-show-inline",
+      "name": "Show open query text next to the field label for monitors",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "data-entry-show-inline",
+      "name": "Show open query text next to the field label for data entry users",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "data-manager-show-inline",
+      "name": "Show open query text next to the field label for data managers",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "do-not-hide-save-buttons",
+      "name": "Do not hide the form's Save and Cancel buttons from monitors and data managers",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "do-not-make-readonly",
+      "name": "Do not make form fields read-only for monitors and data managers",
+      "type": "checkbox",
+      "super-users-only": true
+    },
+    {
+      "key": "include-field-label",
+      "name": "Show the field label alongside the variable name in the SDV panel and dashboard",
+      "type": "checkbox",
+      "super-users-only": true
+    }
+  ],
+  "compatibility": {
+    "php-version-min": "8.1.0",
+    "php-version-max": "8.4.99",
+    "redcap-version-min": "14.7.0",
+    "redcap-version-max": ""
+  }
+}
