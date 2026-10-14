@@ -144,6 +144,10 @@ Each clearance is logged as `SDV: status cleared after form data was deleted`.
 - **Summary tab** — counts per form and status, per site, with % done (complete or not required). Counts link to the
   filtered forms list.
 
+Every tab and both exports show only the user's own site (if they are in a DAG) and only forms they have rights to
+view. Exported text that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, tab or carriage
+return) is prefixed with `'`.
+
 When a monitor opens the dashboard, it syncs automatically, at most every 5 minutes. **Sync now**, shown only to
 monitors, forces a sync. Other roles see the results of the last sync.
 

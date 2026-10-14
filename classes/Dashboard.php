@@ -45,6 +45,23 @@ class Dashboard
         return in_array($t, ['forms', 'queries', 'summary'], true) ? $t : 'forms';
     }
 
+    /**
+     * Instruments the user has rights to view, or null when they can view them all. Rows for other forms are
+     * left out of every list, summary and export.
+     */
+    public function viewableInstruments(): ?array
+    {
+        if ($this->roles->isSuperUser) return null;
+        $all = array_keys($this->proj->forms);
+        $viewable = array_values(array_filter($all, fn($i) => $this->roles->canViewForm($i)));
+        return count($viewable) === count($all) ? null : $viewable;
+    }
+
+    private function instrumentFilter(string $instrument): string
+    {
+        return isset($this->proj->forms[$instrument]) && $this->roles->canViewForm($instrument) ? $instrument : '';
+    }
+
     // The DAG filter: a user assigned to a DAG is always restricted to it
     private function groupFilter(array $in): string
     {
@@ -63,7 +80,8 @@ class Dashboard
             'record' => self::str($in, 'record'),
             'group_id' => $this->groupFilter($in),
             'event_id' => isset($this->proj->eventInfo[(int)$event]) ? (string)(int)$event : '',
-            'instrument' => isset($this->proj->forms[$instrument]) ? $instrument : '',
+            'instrument' => $this->instrumentFilter($instrument),
+            'instruments' => $this->viewableInstruments(),
             'status' => isset(SdvService::STATUS_LABELS[$status]) ? $status : '',
             'open_queries' => in_array($openq, ['yes', 'no'], true) ? $openq : '',
             'user' => self::str($in, 'user', 255),
@@ -82,7 +100,8 @@ class Dashboard
             'record' => self::str($in, 'record'),
             'group_id' => $this->groupFilter($in),
             'event_id' => isset($this->proj->eventInfo[(int)$event]) ? (string)(int)$event : '',
-            'instrument' => isset($this->proj->forms[$instrument]) ? $instrument : '',
+            'instrument' => $this->instrumentFilter($instrument),
+            'instruments' => $this->viewableInstruments(),
             'field' => self::str($in, 'field'),
             'status' => isset(SdvService::QUERY_STATUS_LABELS[$status]) ? $status : '',
             'user' => self::str($in, 'user', 255),
@@ -211,7 +230,9 @@ class Dashboard
     public function summary(): array
     {
         $out = [];
+        $viewable = $this->viewableInstruments();
         foreach ($this->repo->formSummary($this->withDags, $this->roles->groupId) as $r) {
+            if ($viewable !== null && !in_array($r['instrument'], $viewable, true)) continue;
             $site = $this->withDags ? ($r['group_id'] === null ? '' : (string)(int)$r['group_id']) : '';
             $out[$site][$r['instrument']][$r['status']] = (int)$r['c'];
         }

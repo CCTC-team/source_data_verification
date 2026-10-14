@@ -247,7 +247,7 @@ class Repository
         $this->q('insert into ' . self::AUDIT . ' (project_id, ts, username, action, record, event_id, instrument, instance, field_name, old_status, new_status, detail)
                   values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [$this->projectId, $ts, $user, $action, $ctx?->record, $ctx?->eventId, $ctx?->instrument, $ctx?->instance,
-                $field, $oldStatus, $newStatus, $detail === null ? null : json_encode($detail)]);
+                $field, $oldStatus, $newStatus, $detail === null ? null : json_encode($detail, JSON_INVALID_UTF8_SUBSTITUTE)]);
     }
 
     public function getAudit(FormContext $ctx): array
@@ -347,7 +347,8 @@ class Repository
     }
 
     /**
-     * @param array $flt keys: record, group_id, event_id, instrument, status, open_queries (yes/no), user, from, to
+     * @param array $flt keys: record, group_id, event_id, instrument, instruments (viewable forms, null = all), status,
+     *                   open_queries (yes/no), user, from, to
      * @return array{0:string,1:array} where-clause and params for sdv_form f
      */
     private function formWhere(array $flt): array
@@ -358,6 +359,10 @@ class Repository
             if (isset($flt[$k]) && $flt[$k] !== '') { $w[] = "$col = ?"; $p[] = $flt[$k]; }
         }
         if (isset($flt['group_id']) && $flt['group_id'] !== '') { $w[] = 'g.group_id = ?'; $p[] = $flt['group_id']; }
+        if (isset($flt['instruments'])) {
+            $w[] = empty($flt['instruments']) ? '1 = 0' : 'f.instrument in (' . self::in($flt['instruments']) . ')';
+            array_push($p, ...$flt['instruments']);
+        }
         if (!empty($flt['user'])) { $w[] = '(f.updated_by = ? or f.completed_by = ?)'; $p[] = $flt['user']; $p[] = $flt['user']; }
         if (!empty($flt['from'])) { $w[] = 'coalesce(f.updated_at, f.created_at) >= ?'; $p[] = $flt['from']; }
         if (!empty($flt['to'])) { $w[] = 'coalesce(f.updated_at, f.created_at) <= ?'; $p[] = $flt['to']; }
@@ -417,6 +422,10 @@ class Repository
             if (isset($flt[$k]) && $flt[$k] !== '') { $w[] = "$col = ?"; $p[] = $flt[$k]; }
         }
         if (isset($flt['group_id']) && $flt['group_id'] !== '') { $w[] = 'g.group_id = ?'; $p[] = $flt['group_id']; }
+        if (isset($flt['instruments'])) {
+            $w[] = empty($flt['instruments']) ? '1 = 0' : 'f.instrument in (' . self::in($flt['instruments']) . ')';
+            array_push($p, ...$flt['instruments']);
+        }
         if (!empty($flt['from'])) { $w[] = 'f.updated_at >= ?'; $p[] = $flt['from']; }
         if (!empty($flt['to'])) { $w[] = 'f.updated_at <= ?'; $p[] = $flt['to']; }
         if (!empty($flt['response'])) {

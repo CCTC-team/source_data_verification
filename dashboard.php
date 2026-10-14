@@ -76,7 +76,7 @@ $siteOptions = $roles->groupId === null ? $dash->groups : [];
 $eventOptions = [];
 if ($proj->longitudinal) foreach ($proj->eventInfo as $eid => $e) $eventOptions[$eid] = $e['name_ext'];
 $formOptions = [];
-foreach ($proj->forms as $f => $info) $formOptions[$f] = strip_tags($info['menu']);
+foreach ($proj->forms as $f => $info) if ($roles->canViewForm($f)) $formOptions[$f] = strip_tags($info['menu']);
 $users = $repo->distinctUsers();
 $userOptions = array_combine($users, $users);
 

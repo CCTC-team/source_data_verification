@@ -149,7 +149,7 @@ class SourceDataVerificationModule extends AbstractExternalModule
         echo '<script src="' . htmlspecialchars($this->getUrl('js/sdv-form.js'), ENT_QUOTES) . '"></script>';
         echo '<div id="cctc-sdv-panel" class="cctc-sdv-panel"></div>';
         echo '<script>CctcSdvForm.init(' . $this->getJavascriptModuleObjectName() . ', '
-            . json_encode($state, $json) . ', ' . json_encode($ui, $json) . ');</script>';
+            . json_encode(self::utf8Safe($state), $json) . ', ' . json_encode($ui, $json) . ');</script>';
     }
 
     // ---- save hook ------------------------------------------------------------------------------
@@ -178,6 +178,22 @@ class SourceDataVerificationModule extends AbstractExternalModule
     public function redcap_module_ajax($action, $payload, $project_id, $record, $instrument, $event_id, $repeat_instance,
                                        $survey_hash, $response_id, $survey_queue_hash, $page, $page_full, $user_id, $group_id)
     {
+        return self::utf8Safe($this->handleAjax($action, $payload, $project_id));
+    }
+
+    /**
+     * Replaces invalid UTF-8 byte sequences (for example in values imported from another system) so that encoding a
+     * response as JSON cannot fail.
+     */
+    private static function utf8Safe($value)
+    {
+        if (is_string($value)) return mb_scrub($value, 'UTF-8');
+        if (is_array($value)) return array_map([self::class, 'utf8Safe'], $value);
+        return $value;
+    }
+
+    private function handleAjax($action, $payload, $project_id): array
+    {
         try {
             if (empty($project_id)) throw new SdvException('No project.');
             $payload = is_array($payload) ? $payload : [];
@@ -193,12 +209,13 @@ class SourceDataVerificationModule extends AbstractExternalModule
 
             if ($action === 'setPlan') {
                 if (!$roles->canEditPlan()) throw new SdvException('Only monitors can change which fields require SDV.');
+                // a change made from a data entry form is only allowed if the user may open that form
+                $ctx = !empty($payload['ctx']) ? $this->ctxFromPayload($proj, $payload['ctx']) : null;
+                if ($ctx) $this->assertAccess($roles, $repo, $ctx);
                 $info = $service->setPlan((string)($payload['field'] ?? ''), (string)($payload['requirement'] ?? ''), $user);
                 $result = ['ok' => true, 'field' => ['requirement' => $info['requirement'], 'override' => $info['override'], 'default' => $info['default']],
                            'reverified' => $info['reverified']];
-                if (!empty($payload['ctx'])) {
-                    $ctx = $this->ctxFromPayload($proj, $payload['ctx']);
-                    $this->assertAccess($roles, $repo, $ctx);
+                if ($ctx) {
                     // the plan changed, so build the state with a fresh plan
                     [, , , $fresh] = $this->services($project_id);
                     $result['state'] = $fresh->buildState($ctx, $roles, $fresh->load($ctx));

@@ -139,7 +139,7 @@ config.json, and routes them to `redcap_module_ajax` ([line 178](SourceDataVerif
 1. **Gatekeeping:** the module must be configured, the user must have an SDV role, and actions in `MONITOR_ACTIONS`
    need a monitor.
 2. **Plan actions** (`setPlan` and `setPlanForm`) are handled first, because they apply to the whole project rather
-   than one form.
+   than one form. A `setPlan` sent from a data entry form runs `assertAccess` on that form before anything is saved.
 3. **Finding the form instance:** query actions look the form up from the `queryId`. The others build it from
    `payload.ctx`.
 4. **`assertAccess`** checks the user's form rights, and that a user in a DAG is opening a record in their own DAG.
@@ -147,7 +147,8 @@ config.json, and routes them to `redcap_module_ajax` ([line 178](SourceDataVerif
 6. The response is the fresh `state`, which the JS re-renders.
 
 Expected errors (`SdvException`, bad input) come back as `{ok:false, error}` and are shown to the user. Anything
-unexpected is logged, and the user gets a generic message.
+unexpected is logged, and the user gets a generic message. `redcap_module_ajax` passes the response through
+`utf8Safe()` (as does the form's initial state), so a stray invalid UTF-8 byte cannot make JSON encoding fail.
 
 ## 7. How an action runs safely
 
@@ -231,7 +232,7 @@ All three pages start with [page_init.php](page_init.php), which calls `services
 `Dashboard`.
 
 - **[dashboard.php](dashboard.php)** has three tabs: Forms, Queries and Summary, all filtered, paged and limited to the
-  user's DAG. When a monitor opens it, `syncIfDue` runs a **sync** if the last one was more than 5 minutes ago.
+  user's DAG and to forms they may view (`Dashboard::viewableInstruments()`, applied in the SQL so paging stays right). When a monitor opens it, `syncIfDue` runs a **sync** if the last one was more than 5 minutes ago.
   **Sync now** forces one. `SdvService::sync()` ([line 651](classes/SdvService.php#L651)):
   1. removes untouched pending rows for forms that no longer need SDV;
   2. clears the SDV state of deleted data;
@@ -242,8 +243,8 @@ All three pages start with [page_init.php](page_init.php), which calls `services
   If one form fails, the sync records the error and carries on with the rest.
 - **[plan.php](plan.php)** lets monitors set each field's requirement, or a whole form at once with `setPlanForm`, and
   shows recent plan changes.
-- **[export.php](export.php)** downloads the Forms or Queries list as a CSV. Text that starts with `= + - @` is
-  prefixed so spreadsheets don't run it as a formula, and each export is logged.
+- **[export.php](export.php)** downloads the Forms or Queries list as a CSV. It uses the same filters, so it is limited in the same way. Text that starts with
+  `= + - @`, a tab or a carriage return is prefixed so spreadsheets don't run it as a formula, and each export is logged.
 
 ## 11. Logging
 

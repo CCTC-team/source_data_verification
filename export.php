@@ -22,8 +22,8 @@ header('Content-Disposition: attachment; filename="' . $filename . '"');
 $out = fopen('php://output', 'w');
 fwrite($out, "\xEF\xBB\xBF");
 
-// neutralise spreadsheet formulas in exported text
-$cell = fn($v) => is_string($v) && $v !== '' && strpbrk($v[0], '=+-@') !== false ? "'" . $v : $v;
+// neutralise spreadsheet formulas in exported text (tab and carriage return can also start one)
+$cell = fn($v) => is_string($v) && $v !== '' && strpbrk($v[0], "=+-@\t\r") !== false ? "'" . $v : $v;
 $row = function (array $values) use ($out, $cell) { fputcsv($out, array_map($cell, $values)); };
 
 if ($tab === 'forms') {
