@@ -79,6 +79,69 @@ check('setPlanForm default succeeds', r.get('ok'), r)
 check('default removes every override on the form', overrides() == {}, overrides())
 check('default restores action-tag requirements', page_requirements(mon.module_page(PID, 'plan')) == defaults)
 
+# a field that becomes required sends complete forms in which it is not verified back for re-verification
+CTX = {'record': '1-1', 'eventId': E1, 'instrument': FORM, 'instance': 1}
+OPTIONAL = next(f for f, v in defaults.items() if v == 'optional')
+
+
+def complete_form(verify=()):
+    state, _ = mon.form_page(PID, '1-1', E1, FORM, 1)
+    if state['form']['status'] in ('complete', 'not_required'):
+        assert mon.ajax('reopenForm', {'ctx': CTX, 'reason': 'plan form test'})['ok']
+    for f in verify:
+        assert mon.ajax('verifyField', {'ctx': CTX, 'field': f})['ok']
+    assert mon.ajax('verifyAllRequired', {'ctx': CTX})['ok']
+    r = mon.ajax('completeForm', {'ctx': CTX})
+    assert r['ok'], r
+
+
+def form_status():
+    return sql(f"select status, status_reason from sdv_form where project_id={PID} and record='1-1' and event_id={E1} "
+               f"and instrument='{FORM}' and instance=1")[0]
+
+
+complete_form()
+if OPTIONAL in (r := mon.ajax('state', {'ctx': CTX}))['state']['fields'] and r['state']['fields'][OPTIONAL]['sdv'] == 'verified':
+    assert mon.ajax('reopenForm', {'ctx': CTX, 'reason': 'plan form test'})['ok']
+    assert mon.ajax('unverifyField', {'ctx': CTX, 'field': OPTIONAL})['ok']
+    complete_form()
+mon.module_page(PID, 'plan')
+r = mon.ajax('setPlan', {'field': OPTIONAL, 'requirement': 'required'})
+status, reason = form_status()
+check('optional -> required sends the complete form to reverify', status == 'reverify', (status, reason))
+check('reverify reason names the plan change and field', reason == f'SDV plan changed: {OPTIONAL} now requires SDV', reason)
+check('response counts the forms sent back', r.get('ok') and r.get('reverified', 0) >= 1, r)
+check('form_reverify audited with the plan change as source', sql(
+    f"select count(*) from sdv_audit where project_id={PID} and record='1-1' and instrument='{FORM}' and action='form_reverify' "
+    f"and detail like '%SDV plan changed%'")[0][0] != '0')
+state, _ = mon.form_page(PID, '1-1', E1, FORM, 1)
+check('form shows Re-verification required and is open for SDV', state['form']['status'] == 'reverify' and state['form']['open'], state['form'])
+r = mon.ajax('completeForm', {'ctx': CTX})
+check('cannot complete again until the newly required field is verified', not r['ok'] and OPTIONAL in r.get('error', ''), r)
+mon.ajax('verifyField', {'ctx': CTX, 'field': OPTIONAL})
+r = mon.ajax('completeForm', {'ctx': CTX})
+check('verify the field and complete again', r['ok'] and r['state']['form']['status'] == 'complete', r)
+
+# a newly required field that is already verified leaves the form complete
+mon.module_page(PID, 'plan')
+mon.ajax('setPlan', {'field': OPTIONAL, 'requirement': 'default'})
+complete_form(verify=[OPTIONAL])
+mon.module_page(PID, 'plan')
+r = mon.ajax('setPlan', {'field': OPTIONAL, 'requirement': 'required'})
+check('already verified field: form stays complete', form_status()[0] == 'complete', form_status())
+
+# required -> optional never sends a form back
+r = mon.ajax('setPlan', {'field': OPTIONAL, 'requirement': 'default'})
+check('required -> optional: form stays complete', form_status()[0] == 'complete' and r.get('reverified') == 0, (form_status(), r))
+
+# whole form set to required
+r = mon.ajax('setPlanForm', {'instrument': FORM, 'requirement': 'required'})
+check('whole form -> required sends the complete form to reverify', form_status()[0] == 'reverify' and r.get('reverified', 0) >= 1, (form_status(), r))
+mon.ajax('setPlanForm', {'instrument': FORM, 'requirement': 'default'})
+logging = admin.get(f'{VER}/Logging/index.php', {'pid': PID})
+check('REDCap Logging records the re-verification from the plan change', 'SDV plan changed' in logging)
+# the form is left open (reverify) for the other suites, which raise queries on it
+
 # validation and permissions
 mon.module_page(PID, 'plan')
 r = mon.ajax('setPlanForm', {'instrument': FORM, 'requirement': 'mandatory'})

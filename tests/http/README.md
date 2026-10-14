@@ -15,7 +15,7 @@ Requirements: Python 3.10+ (standard library only), the container running on htt
 | `test_flow.py <pid>` | Full workflow: plan, verify, queries, complete, save-hook and import change detection, DAGs, dashboard, export, Logging (65 checks) |
 | `test_triggers.py <pid>` | Each re-verification trigger mode (10 checks) |
 | `test_integrity.py <pid>` | Read-only form rights cannot respond; sync is monitor-only; sync finds unverified changes on complete forms; SDV state of deleted or re-created records is cleared (22 checks) |
-| `test_plan_form.py <pid>` | Setting every field on a form to one SDV requirement from the plan page: overrides, audit, Logging, permissions, reset to default (24 checks) |
+| `test_plan_form.py <pid>` | Setting every field on a form to one SDV requirement from the plan page: overrides, audit, Logging, permissions, reset to default; complete forms sent back for re-verification when an unverified field becomes required (35 checks) |
 | `test_concurrency.py <pid> <record> <event_id> [instrument] [instance] [rounds]` | Parallel monitor sessions on one pending form instance: concurrent query raises create one query; a form is never completed while a query raised in parallel is open |
 | `smoke.py <pid>` | Verifies and completes every form instance needing SDV in any project type |
 | `perf_seed.py <pid> <n>` + `perf_seed_activity.sql` | Seeds a large project and equivalent SDV/DRW activity |

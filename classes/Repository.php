@@ -140,6 +140,21 @@ class Repository
         $this->q('delete from ' . self::FORM . ' where ' . self::FORM_KEY, $ctx->keyParams());
     }
 
+    /**
+     * Locks and returns the 'complete' instances of an instrument in which any of $fields is not verified
+     * (idx_instrument_status, then the sdv_field primary key). Only the form rows are locked.
+     */
+    public function lockCompleteFormsMissingVerification(string $instrument, array $fields): array
+    {
+        if (empty($fields)) return [];
+        return $this->rows('select f.record, f.event_id, f.instrument, f.instance from ' . self::FORM . " f
+                where f.project_id = ? and f.instrument = ? and f.status = 'complete'
+                  and (select count(*) from " . self::FIELD . " v where v.project_id = f.project_id and v.record = f.record
+                       and v.event_id = f.event_id and v.instance = f.instance and v.status = 'verified'
+                       and v.field_name in (" . self::in($fields) . ")) < ?
+                for update", [$this->projectId, $instrument, ...$fields, count($fields)]);
+    }
+
     public function updateForm(FormContext $ctx, array $cols): void
     {
         $sets = implode(', ', array_map(fn($c) => "$c = ?", array_keys($cols)));

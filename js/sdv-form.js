@@ -169,7 +169,8 @@ var CctcSdvForm = (function () {
         });
         sel.addEventListener('change', function () {
             var value = sel.value;
-            if (!confirm('Change the SDV requirement of "' + field + '" to "' + value + '" for this field on ALL records?')) {
+            if (!confirm('Change the SDV requirement of "' + field + '" to "' + value + '" for this field on ALL records?'
+                    + (value === 'required' ? '\n\nForms already marked SDV complete in which this field is not verified will be set to Re-verification required.' : ''))) {
                 sel.value = f.requirement;
                 return;
             }

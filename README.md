@@ -67,6 +67,13 @@ for example to fully verify an eligibility form or to switch SDV off for a whole
 - One audit entry is written per field that changes, and one Logging entry for the whole change
   (`SDV: plan changed for whole form`).
 
+When a change makes a field **required** (from optional or excluded, for one field or a whole form), every form already
+marked **SDV complete** in which that field is not verified is set to **Re-verification required**, with the reason
+*SDV plan changed: <field> now requires SDV*. A monitor verifies the field and marks the form complete again. Forms
+in which the field is already verified stay complete, and changes that make a field optional or excluded never change
+a form's status. The confirmation prompt warns about this, the result message says how many forms were sent back, and
+each form gets an audit entry and a Logging entry (`SDV: form requires re-verification`, source *SDV plan changed*).
+
 #### Workflow on the data entry form ####
 
 Under each field label the module shows an SDV badge: *SDV required*, *SDV verified*, *Changed since SDV*, *Query
@@ -82,7 +89,7 @@ Form statuses:
 | SDV in progress | At least one field has been verified or queried |
 | SDV complete | A monitor marked the form complete. All required fields were verified and no queries were open |
 | SDV not required | A monitor marked SDV as not required, with a reason. Any open queries are closed |
-| Re-verification required | Data changed after the form was marked complete (see trigger) |
+| Re-verification required | Data changed after the form was marked complete (see trigger), or a field that was not verified became required |
 
 Rules:
 

@@ -31,7 +31,8 @@ echo "<p style='max-width: 900px'>The SDV plan sets which fields need Source Dat
     . " but they don't stop a form being marked SDV complete.</p>";
 echo $canEdit
     ? "<p style='max-width: 900px'>As a monitor you can change a field's requirement below, or set every field on a form at once. The change applies on <b>all records</b>
-       and is recorded in the project Logging. Forms already marked SDV complete keep their status.</p>"
+       and is recorded in the project Logging. When a field becomes required, forms already marked SDV complete in which it is not
+       verified are set to <b>Re-verification required</b>.</p>"
     : "<p id='cctc-sdv-plan-readonly'><i>Only monitors can change the SDV plan.</i></p>";
 
 $sections = '';
@@ -102,6 +103,10 @@ if ($canEdit) {
             msg.className = isError ? 'red' : 'darkgreen';
             msg.style.display = 'block';
         }
+        function reverifiedText(n) {
+            return n ? ' ' + n + ' form' + (n === 1 ? '' : 's') + ' marked SDV complete now ' + (n === 1 ? 'needs' : 'need') + ' re-verification.' : '';
+        }
+        var REVERIFY_WARNING = '\n\nForms already marked SDV complete in which a newly required field is not verified will be set to Re-verification required.';
         // keep the "x of y field(s) require SDV" count of a form in step with its dropdowns
         function recount(table) {
             var n = table.querySelectorAll('select.cctc-sdv-plan-select').length ? 0 : null;
@@ -113,7 +118,8 @@ if ($canEdit) {
             sel.addEventListener('change', function () {
                 var field = sel.getAttribute('data-field');
                 var previous = sel.getAttribute('data-current');
-                if (!confirm('Change the SDV requirement of "' + field + '" to "' + sel.value + '" for this field on ALL records?')) {
+                if (!confirm('Change the SDV requirement of "' + field + '" to "' + sel.value + '" for this field on ALL records?'
+                        + (sel.value === 'required' ? REVERIFY_WARNING : ''))) {
                     sel.value = previous;
                     return;
                 }
@@ -128,7 +134,7 @@ if ($canEdit) {
                     sel.setAttribute('data-current', resp.field.requirement);
                     sel.value = resp.field.requirement;
                     recount(sel.closest('table'));
-                    show('SDV requirement of ' + field + ' set to ' + resp.field.requirement + '.', false);
+                    show('SDV requirement of ' + field + ' set to ' + resp.field.requirement + '.' + reverifiedText(resp.reverified), false);
                 }).catch(function (err) {
                     sel.disabled = false;
                     sel.value = previous;
@@ -144,7 +150,8 @@ if ($canEdit) {
                 var table = document.querySelector('table.cctc-sdv-table[data-instrument="' + instrument + '"]');
                 var n = table.querySelectorAll('select.cctc-sdv-plan-select').length;
                 var label = requirement === 'default' ? 'their default (from action tags)' : '"' + requirement + '"';
-                if (!confirm('Set the SDV requirement of all ' + n + ' field(s) on "' + instrument + '" to ' + label + ' on ALL records?')) {
+                if (!confirm('Set the SDV requirement of all ' + n + ' field(s) on "' + instrument + '" to ' + label + ' on ALL records?'
+                        + (requirement === 'required' || requirement === 'default' ? REVERIFY_WARNING : ''))) {
                     sel.value = '';
                     return;
                 }
@@ -163,7 +170,8 @@ if ($canEdit) {
                         fieldSel.setAttribute('data-current', resp.fields[field].requirement);
                     });
                     recount(table);
-                    show('All fields on ' + instrument + ' set to ' + (requirement === 'default' ? 'their default' : requirement) + '.', false);
+                    show('All fields on ' + instrument + ' set to ' + (requirement === 'default' ? 'their default' : requirement) + '.'
+                        + reverifiedText(resp.reverified), false);
                 }).catch(function (err) {
                     sel.disabled = false;
                     sel.value = '';

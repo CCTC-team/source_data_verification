@@ -96,6 +96,12 @@ checks all live here:
 
 The result is cached per instrument for the rest of the request.
 
+Plan changes go through `SdvService::applyPlan()`, for both a single field (`setPlan`) and a whole form
+(`setPlanForInstrument`). In the same transaction as the override, `reverifyCompleteForms()` sets every `complete` form
+in which a **newly required** field is not verified to `reverify`, using
+`Repository::lockCompleteFormsMissingVerification()` to find and lock those form rows. So a form marked SDV complete
+always has every required field verified. Changes that make a field optional or excluded never change a form's status.
+
 ## 5. A user opens a data entry form
 
 REDCap calls `redcap_data_entry_form` ([line 96](SourceDataVerificationModule.php#L96)), which calls `renderForm`:

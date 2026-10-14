@@ -194,22 +194,24 @@ class SourceDataVerificationModule extends AbstractExternalModule
             if ($action === 'setPlan') {
                 if (!$roles->canEditPlan()) throw new SdvException('Only monitors can change which fields require SDV.');
                 $info = $service->setPlan((string)($payload['field'] ?? ''), (string)($payload['requirement'] ?? ''), $user);
-                $result = ['ok' => true, 'field' => ['requirement' => $info['requirement'], 'override' => $info['override'], 'default' => $info['default']]];
+                $result = ['ok' => true, 'field' => ['requirement' => $info['requirement'], 'override' => $info['override'], 'default' => $info['default']],
+                           'reverified' => $info['reverified']];
                 if (!empty($payload['ctx'])) {
                     $ctx = $this->ctxFromPayload($proj, $payload['ctx']);
                     $this->assertAccess($roles, $repo, $ctx);
                     // the plan changed, so build the state with a fresh plan
                     [, , , $fresh] = $this->services($project_id);
                     $result['state'] = $fresh->buildState($ctx, $roles, $fresh->load($ctx));
-                    $result['message'] = "SDV requirement of {$payload['field']} set to {$info['requirement']} on all records.";
+                    $result['message'] = "SDV requirement of {$payload['field']} set to {$info['requirement']} on all records."
+                        . self::reverifiedMessage($info['reverified']);
                 }
                 return $result;
             }
 
             if ($action === 'setPlanForm') {
                 if (!$roles->canEditPlan()) throw new SdvException('Only monitors can change which fields require SDV.');
-                $infos = $service->setPlanForInstrument((string)($payload['instrument'] ?? ''), (string)($payload['requirement'] ?? ''), $user);
-                return ['ok' => true, 'fields' => array_map(fn($i) => [
+                [$infos, $reverified] = $service->setPlanForInstrument((string)($payload['instrument'] ?? ''), (string)($payload['requirement'] ?? ''), $user);
+                return ['ok' => true, 'reverified' => $reverified, 'fields' => array_map(fn($i) => [
                     'requirement' => $i['requirement'], 'override' => $i['override'], 'default' => $i['default'],
                 ], $infos)];
             }
@@ -283,6 +285,11 @@ class SourceDataVerificationModule extends AbstractExternalModule
             $this->log('Error in redcap_module_ajax', ['action' => $action, 'error' => $e->getMessage()]);
             return ['ok' => false, 'error' => 'An unexpected error occurred and has been logged. Please refresh and try again.'];
         }
+    }
+
+    private static function reverifiedMessage(int $n): string
+    {
+        return $n === 0 ? '' : " $n form" . ($n === 1 ? '' : 's') . ' marked SDV complete now ' . ($n === 1 ? 'needs' : 'need') . ' re-verification.';
     }
 
     private function ctxFromPayload(\Project $proj, $c): FormContext

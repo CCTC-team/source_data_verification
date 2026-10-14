@@ -469,6 +469,7 @@ class SdvService
 
     /**
      * Sets a field's SDV requirement project-wide. 'default' removes the override so the action tags decide.
+     * @return array the updated plan entry, plus 'reverified': the number of complete forms sent back for re-verification
      */
     public function setPlan(string $field, string $requirement, string $user): array
     {
@@ -476,37 +477,40 @@ class SdvService
         if ($instrument === null || !in_array($field, $this->plan->sdvFieldNames($instrument), true)) {
             throw new SdvException("Field '$field' cannot take part in SDV.");
         }
-        [$infos, $changed] = $this->applyPlan($instrument, [$field], $requirement, $user);
+        [$infos, $changed, $reverified] = $this->applyPlan($instrument, [$field], $requirement, $user);
         if (!empty($changed)) {
             $this->logEvent('SDV: plan changed', null, ['field' => $field, 'instrument' => $instrument,
-                'from' => $changed[$field], 'to' => $infos[$field]['requirement']]);
+                'from' => $changed[$field], 'to' => $infos[$field]['requirement'], 'forms sent for re-verification' => $reverified]);
         }
-        return $infos[$field];
+        return $infos[$field] + ['reverified' => $reverified];
     }
 
     /**
      * Sets the SDV requirement of every field on an instrument project-wide, as one change.
-     * @return array<string, array> field => updated plan entry
+     * @return array{0: array<string, array>, 1: int} [field => updated plan entry, complete forms sent back for re-verification]
      */
     public function setPlanForInstrument(string $instrument, string $requirement, string $user): array
     {
         $fields = isset($this->proj->forms[$instrument]) ? $this->plan->sdvFieldNames($instrument) : [];
         if (empty($fields)) throw new SdvException("Form '$instrument' has no fields that can take part in SDV.");
-        [$infos, $changed] = $this->applyPlan($instrument, $fields, $requirement, $user);
+        [$infos, $changed, $reverified] = $this->applyPlan($instrument, $fields, $requirement, $user);
         if (!empty($changed)) {
             $this->logEvent('SDV: plan changed for whole form', null, [
                 'instrument' => $instrument,
                 'to' => $requirement === 'default' ? 'default (from action tags)' : $requirement,
                 'fields' => implode(', ', array_map(fn($f, $from) => "$f ($from -> {$infos[$f]['requirement']})", array_keys($changed), $changed)),
+                'forms sent for re-verification' => $reverified,
             ]);
         }
-        return $infos;
+        return [$infos, $reverified];
     }
 
     /**
      * Stores the overrides for the given fields of one instrument in one transaction, auditing each field that
-     * changes. 'default' removes the override so the action tags decide.
-     * @return array{0: array<string, array>, 1: array<string, string>} [field => updated plan entry, changed field => old requirement]
+     * changes. 'default' removes the override so the action tags decide. Complete forms in which a newly
+     * required field is not verified are set to 'reverify' in the same transaction.
+     * @return array{0: array<string, array>, 1: array<string, string>, 2: int}
+     *         [field => updated plan entry, changed field => old requirement, forms sent back for re-verification]
      */
     private function applyPlan(string $instrument, array $fields, string $requirement, string $user): array
     {
@@ -521,19 +525,49 @@ class SdvService
             $infos[$field] = ['requirement' => $override ?? $info['default'], 'override' => $override] + $info;
             if ($override !== $info['override']) $changes[$field] = $info;
         }
-        if (empty($changes)) return [$infos, []];
+        if (empty($changes)) return [$infos, [], 0];
+
+        $newlyRequired = [];
+        foreach ($changes as $field => $info) {
+            if ($infos[$field]['requirement'] === SdvPlan::REQUIRED && $info['requirement'] !== SdvPlan::REQUIRED) $newlyRequired[] = $field;
+        }
 
         $ts = self::now();
         $formLevel = count($fields) > 1;
-        $this->repo->transaction(function () use ($changes, $infos, $instrument, $user, $ts, $formLevel) {
+        $reverified = $this->repo->transaction(function () use ($changes, $infos, $instrument, $user, $ts, $formLevel, $newlyRequired) {
             foreach ($changes as $field => $info) {
                 $override = $infos[$field]['override'];
                 $this->repo->setPlanOverride($field, $override, $user, $ts);
                 $this->repo->audit($user, $ts, 'plan_changed', null, $field, $info['requirement'], $infos[$field]['requirement'],
                     ['instrument' => $instrument, 'override' => $override, 'default' => $info['default']] + ($formLevel ? ['whole_form' => true] : []));
             }
+            return $this->reverifyCompleteForms($instrument, $newlyRequired, $user, $ts);
         });
-        return [$infos, array_map(fn($i) => $i['requirement'], $changes)];
+
+        foreach ($reverified as $ctx) {
+            $this->logEvent('SDV: form requires re-verification', $ctx, ['fields' => implode(', ', $newlyRequired), 'source' => 'SDV plan changed']);
+        }
+        return [$infos, array_map(fn($i) => $i['requirement'], $changes), count($reverified)];
+    }
+
+    /**
+     * Sets complete forms in which any of the newly required fields is not verified to 'reverify', so a form
+     * marked SDV complete always has every required field verified. Runs inside the plan change's transaction.
+     * @return FormContext[] the forms sent back
+     */
+    private function reverifyCompleteForms(string $instrument, array $newlyRequired, string $user, string $ts): array
+    {
+        if (empty($newlyRequired)) return [];
+        $reason = 'SDV plan changed: ' . implode(', ', $newlyRequired) . (count($newlyRequired) === 1 ? ' now requires' : ' now require') . ' SDV';
+        $out = [];
+        foreach ($this->repo->lockCompleteFormsMissingVerification($instrument, $newlyRequired) as $r) {
+            $ctx = new FormContext($this->repo->projectId, $r['record'], (int)$r['event_id'], $r['instrument'], (int)$r['instance']);
+            $this->repo->updateForm($ctx, ['status' => self::REVERIFY, 'status_reason' => $reason, 'updated_by' => $user, 'updated_at' => $ts]);
+            $this->repo->audit($user, $ts, 'form_reverify', $ctx, null, self::COMPLETE, self::REVERIFY,
+                ['changed_fields' => $newlyRequired, 'trigger' => 'plan changed', 'source' => 'SDV plan changed']);
+            $out[] = $ctx;
+        }
+        return $out;
     }
 
     public function raiseQuery(FormContext $ctx, string $field, ?string $text, string $user): void
