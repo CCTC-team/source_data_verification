@@ -16,6 +16,9 @@
 .cctc-sdv-readonly .cctc-sdv-badge button,
 .cctc-sdv-readonly .cctc-sdv-badge select,
 .cctc-sdv-readonly .cctc-sdv-badge textarea { pointer-events: auto; background-color: revert; }
+/* REDCap's field History and Data Resolution icons, and opening an uploaded file, do not change data */
+.cctc-sdv-readonly .rc-field-icons a,
+.cctc-sdv-readonly a.filedownloadlink { pointer-events: auto; }
 
 .cctc-sdv-badge { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-weight: normal; font-size: 12px; }
 .cctc-sdv-chip { display: inline-flex; gap: 3px; align-items: center; padding: 1px 6px; border-radius: 10px; border: 1px solid; line-height: 1.6; }
