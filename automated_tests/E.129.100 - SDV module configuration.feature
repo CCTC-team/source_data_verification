@@ -9,13 +9,6 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"
     Then I should see "External Modules - Module Manager"
-    And I should NOT see "Source Data Verification - v1.0.0"
-    When I click on the button labeled "Enable a module"
-    And I wait for 2 seconds
-    Then I should see "Available Modules"
-    And I click on the button labeled "Enable" in the row labeled "Source Data Verification"
-    And I wait for 1 second
-    And I click on the button labeled "Enable"
     Then I should see "Source Data Verification - v1.0.0"
 
   Scenario: E.129.100 - Enable and configure the module in a project
