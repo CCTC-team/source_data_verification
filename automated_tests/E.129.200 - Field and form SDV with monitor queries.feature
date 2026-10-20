@@ -9,6 +9,10 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"
     Then I should see "External Modules - Module Manager"
+    And I click on the button labeled "Disable"
+    Then I should see "Disable module?"
+    When I click on the button labeled "Disable module"
+    Then I should NOT see "Source Data Verification - v1.0.0"
     When I click on the button labeled "Enable a module"
     And I wait for 2 seconds
     And I click on the button labeled "Enable" in the row labeled "Source Data Verification"
