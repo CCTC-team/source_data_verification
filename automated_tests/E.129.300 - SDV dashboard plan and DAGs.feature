@@ -17,7 +17,7 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
 
   Scenario: Set up the project with DAGs
     Given I create a new project named "E.129.300" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
-    And I click on the link labeled "Manage"
+    And I click on the second link labeled "Manage"
     When I click on the button labeled "Enable a module"
     And I click on the button labeled "Enable" in the row labeled "Source Data Verification - v1.0.0"
 
@@ -40,7 +40,7 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
     And I click on the button labeled "Import Data"
     Then I should see "Import Successful!"
 
-    Given I click on the link labeled "Manage"
+    Given I click on the second link labeled "Manage"
     And I click on the button labeled "Configure"
     And I select "Monitor" on the dropdown field labeled "1. Monitor role(s)"
     And I select "DataEntryPI" on the dropdown field labeled "1. Data entry role(s)"
