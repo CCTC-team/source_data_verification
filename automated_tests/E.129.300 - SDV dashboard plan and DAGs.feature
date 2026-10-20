@@ -4,7 +4,7 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
   I want to see SDV progress and open queries
   So that I can plan monitoring visits and resolve outstanding queries
 
-  Scenario: Enable external Module from Control Center
+  Scenario: Verify external module is enabled in Control Center
     Given I login to REDCap with the user "Test_Admin"
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"

@@ -4,7 +4,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
   I want to verify fields against source and mark forms as SDV complete
   So that the sponsor has an auditable record of source data verification
 
-  Scenario: Enable external Module from Control Center
+  Scenario: Verify external module is enabled in Control Center
     Given I login to REDCap with the user "Test_Admin"
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"

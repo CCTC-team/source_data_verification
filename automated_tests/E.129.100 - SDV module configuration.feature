@@ -4,7 +4,7 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
   I want to configure Source Data Verification for a project
   So that monitors, data entry users and data managers can carry out SDV
 
-  Scenario: Enable external Module from Control Center
+  Scenario: Verify external module is enabled in Control Center
     Given I login to REDCap with the user "Test_Admin"
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"
