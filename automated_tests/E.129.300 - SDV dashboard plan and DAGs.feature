@@ -8,6 +8,11 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
     Given I login to REDCap with the user "Test_Admin"
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"
+    When I click on the button labeled "Enable a module"
+    And I wait for 2 seconds
+    And I click on the button labeled "Enable" in the row labeled "Source Data Verification"
+    And I wait for 1 second
+    And I click on the button labeled "Enable"
     Then I should see "Source Data Verification - v1.0.0"
 
   Scenario: Set up the project with DAGs
