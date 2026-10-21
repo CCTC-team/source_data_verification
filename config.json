@@ -152,7 +152,7 @@
   "compatibility": {
     "php-version-min": "8.1.0",
     "php-version-max": "8.4.99",
-    "redcap-version-min": "14.7.0",
-    "redcap-version-max": ""
+    "redcap-version-min": "17.5.6",
+    "redcap-version-max": "17.5.6"
   }
 }

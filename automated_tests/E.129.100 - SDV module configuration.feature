@@ -9,7 +9,10 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
     When I click on the link labeled "Control Center"
     And I click on the link labeled "Manage"
     Then I should see "External Modules - Module Manager"
-    And I should NOT see "Source Data Verification - v1.0.0"
+    And I click on the button labeled "Disable"
+    Then I should see "Disable module?"
+    When I click on the button labeled "Disable module"
+    Then I should NOT see "Source Data Verification - v1.0.0"
     When I click on the button labeled "Enable a module"
     And I wait for 2 seconds
     Then I should see "Available Modules"
@@ -20,7 +23,7 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
 
   Scenario: E.129.100 - Enable and configure the module in a project
     Given I create a new project named "E.129.100" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
-    And I click on the link labeled "Manage"
+    And I click on the second link labeled "Manage"
     Then I should see "External Modules - Project Module Manager"
     When I click on the button labeled "Enable a module"
     And I click on the button labeled "Enable" in the row labeled "Source Data Verification - v1.0.0"
@@ -35,7 +38,7 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
     Then I should see "Test User4" within the "Monitor" row of the column labeled "Username" of the User Rights table
 
     # VERIFY - a role cannot be both a monitor and a data entry role
-    Given I click on the link labeled "Manage"
+    Given I click on the second link labeled "Manage"
     And I click on the button labeled "Configure"
     Then I should see "Configure Module"
     And I select "Monitor" on the dropdown field labeled "1. Monitor role(s)"
