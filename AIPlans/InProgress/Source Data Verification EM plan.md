@@ -26,7 +26,7 @@ folder. Paths under `redcap_source/modules/source_data_verification_v1.0.0/` are
 do:
 
 - whole-form plan changes skip ignore-tagged fields (Phase 9);
-- the E.129 Cypress features have never been run (Phase 10);
+- the E.131 Cypress features have never been run (Phase 10);
 - excluded fields should never send a complete form back for re-verification (Phase 11, **needs the user's go-ahead**);
 - value hashes can be reversed for fields with few possible values (Phase 12, **needs the user's decision**);
 - README notes (see *Documentation*).
@@ -48,7 +48,7 @@ The original design notes are in `~/.claude/plans/parsed-chasing-nygaard.md`.
 - **`AIPlans/InProgress/redcap_save_record_mon_qr old-new values plan.md`**, Phase 4 — a previous module Cypress run
   (`EM_MODULE=monitoring_qr_v1.0.1 docker compose run --rm cypress`), as a worked example.
 - **`redcap_source/modules/monitoring_qr_v1.1.0/automated_tests/`** — the E.128 features and the step phrasing the
-  E.129 features copied, plus the shared `fixtures/cdisc_files/ProjectTypes` used by `setup_project.py`.
+  E.131 features copied, plus the shared `fixtures/cdisc_files/ProjectTypes` used by `setup_project.py`.
 
 ---
 
@@ -130,7 +130,7 @@ The original design notes are in `~/.claude/plans/parsed-chasing-nygaard.md`.
 
 ## Phase 6: README, Cypress features, HTTP tests  ✅ DONE (`be7f3b6`)
 
-- [x] **6a.** `README.md`, the `automated_tests/E.129.*` features (written, **not yet run**; see Phase 10), and the
+- [x] **6a.** `README.md`, the `automated_tests/E.131.*` features (written, **not yet run**; see Phase 10), and the
   `tests/http/` suites.
 
 ---
@@ -198,7 +198,7 @@ Test-first, as paired sub-items. The behaviour lives in `SdvService::setPlanForI
 
 ---
 
-## Phase 10: Run the E.129 Cypress features
+## Phase 10: Run the E.131 Cypress features
 
 These have never been run. **Ask the user before 10c.**
 
@@ -216,7 +216,7 @@ Integration tests against the running app come after the code, as an accepted ex
   - Option 1: run against 15.5.36, the AIO's declared version.
   - Option 2: point the runner at 14.7.0.
   - Record the choice and why in this plan.
-- [ ] **10b. Check the features still match the module.** The E.129 features were written before Phases 7 to 9, so
+- [ ] **10b. Check the features still match the module.** The E.131 features were written before Phases 7 to 9, so
   read them against the current behaviour:
   - sync is monitor-only;
   - responding to a query needs edit rights;
@@ -224,11 +224,11 @@ Integration tests against the running app come after the code, as an accepted ex
   - the tables are named `sdv_*`;
   - a field that becomes required sends unverified complete forms back for re-verification (Decision 10). Look for
     any scenario that completes a form and then makes a field required, and expects the form to stay complete. For
-    example, `E.129.300` changes the plan and then completes forms.
+    example, `E.131.300` changes the plan and then completes forms.
   - Fix any step that now asserts old behaviour.
-  - Files: `automated_tests/E.129.100 - SDV module configuration.feature`,
-    `E.129.200 - Field and form SDV with monitor queries.feature`,
-    `E.129.300 - SDV dashboard plan and DAGs.feature`, and `automated_tests/step_definitions/external_module.js`.
+  - Files: `automated_tests/E.131.100 - SDV module configuration.feature`,
+    `E.131.200 - Field and form SDV with monitor queries.feature`,
+    `E.131.300 - SDV dashboard plan and DAGs.feature`, and `automated_tests/step_definitions/external_module.js`.
 - [ ] **10c. Run** — **only after the user confirms the database reset.** With the runner image built
   (`docker compose build --ssh default` needs the ssh-agent key for `rctf` / `redcap_rsvc`):
 
@@ -245,7 +245,7 @@ Integration tests against the running app come after the code, as an accepted ex
 - [ ] **10e.** Rerun until everything passes. Record the pass count and attempts here, as Phase 4 of the
   `monitoring_qr` plan did.
 
-Review: subagent — check that the E.129 features cover the URS statements in `automated_tests/urs/` and the
+Review: subagent — check that the E.131 features cover the URS statements in `automated_tests/urs/` and the
 behaviour added in Phases 7 to 9 (deleted data, form rights, monitor-only sync, whole-form plan, complete forms sent
 back when a field becomes required). List any gaps as new scenarios to write.
 
@@ -353,7 +353,7 @@ what was verified, when and by whom.
   - `test_concurrency.py`
 - [ ] `smoke.py` passes on at least two other fresh project types (e.g. `NonLongitudinal_RepeatingInstruments_withDAGs`
   and `NonRepeating_SingleArm_noDAGs`).
-- [ ] The E.129 Cypress features pass via `EM_MODULE=source_data_verification_v1.0.0` (Phase 10).
+- [ ] The E.131 Cypress features pass via `EM_MODULE=source_data_verification_v1.0.0` (Phase 10).
 - [ ] If Phase 11 went ahead: under the `always` trigger, an import that changes an `@NOTMONITORED` field on a
   complete form leaves it complete, both on form open and after **Sync now**.
 - [ ] Manual check on the SDV Plan page as Test_User4:

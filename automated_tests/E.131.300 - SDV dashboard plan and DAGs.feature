@@ -1,4 +1,4 @@
-Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV status, monitor queries and progress by site, restricted to the user's data access group, and an SDV plan page where monitors set which fields require SDV.
+Feature: E.131.300 - The system shall provide an SDV dashboard of form SDV status, monitor queries and progress by site, restricted to the user's data access group, and an SDV plan page where monitors set which fields require SDV.
 
   As a monitor or site user
   I want to see SDV progress and open queries
@@ -20,7 +20,7 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
     Then I should see "Source Data Verification - v1.0.0"
 
   Scenario: Set up the project with DAGs
-    Given I create a new project named "E.129.300" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
+    Given I create a new project named "E.131.300" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
     And I click on the second link labeled "Manage"
     When I click on the button labeled "Enable a module"
     And I click on the button labeled "Enable" in the row labeled "Source Data Verification - v1.0.0"
@@ -55,11 +55,11 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
     Then I should see "Source Data Verification - v1.0.0"
     And I logout
 
-  Scenario: E.129.300 - SDV plan, dashboard and DAG restriction
+  Scenario: E.131.300 - SDV plan, dashboard and DAG restriction
     # VERIFY - monitors change the SDV plan for all records
     Given I login to REDCap with the user "Test_User4"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.300"
+    And I click on the link labeled "E.131.300"
     And I click on the link labeled "SDV Plan"
     Then I should see "Text Validation"
     When I select the SDV plan requirement "excluded" for the field "email_v2"
@@ -95,7 +95,7 @@ Feature: E.129.300 - The system shall provide an SDV dashboard of form SDV statu
     # VERIFY - a DAG user only sees their own site's records
     Given I login to REDCap with the user "Test_User1"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.300"
+    And I click on the link labeled "E.131.300"
     And I click on the link labeled "SDV Dashboard"
     Then I should see a link labeled "1-1"
     And I should NOT see the record "2-1" in the SDV dashboard
