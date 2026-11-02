@@ -188,7 +188,7 @@ form instance's values.
 
 #### Automation testing ####
 
-Cypress/Gherkin features are in `automated_tests` (E.129.100–E.129.300), with EM-specific step definitions in
+Cypress/Gherkin features are in `automated_tests` (E.131.100–E.131.300), with EM-specific step definitions in
 `automated_tests/step_definitions/external_module.js` and the requirements in `automated_tests/urs`. They follow the
 same conventions as the other CCTC modules; see
 [Setup_Overview.md](https://github.com/CCTC-team/CCTC_REDCap_Docker/blob/redcap_val/Setup_Overview.md).

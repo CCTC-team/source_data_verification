@@ -1,4 +1,4 @@
-Feature: E.129.200 - The system shall allow monitors to mark fields as requiring SDV, verify individual fields, raise and resolve monitor queries with data entry users, and mark forms as SDV complete, re-opening verification when verified data changes.
+Feature: E.131.200 - The system shall allow monitors to mark fields as requiring SDV, verify individual fields, raise and resolve monitor queries with data entry users, and mark forms as SDV complete, re-opening verification when verified data changes.
 
   As a monitor
   I want to verify fields against source and mark forms as SDV complete
@@ -21,7 +21,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     Then I should see "Source Data Verification - v1.0.0"
 
   Scenario: Set up the project
-    Given I create a new project named "E.129.200" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
+    Given I create a new project named "E.131.200" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
     And I click on the second link labeled "Manage"
     When I click on the button labeled "Enable a module"
     And I click on the button labeled "Enable" in the row labeled "Source Data Verification - v1.0.0"
@@ -62,10 +62,10 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     Then I should see "Source Data Verification - v1.0.0"
     And I logout
 
-  Scenario: E.129.200 - Monitor verifies fields, queries the site and completes SDV
+  Scenario: E.131.200 - Monitor verifies fields, queries the site and completes SDV
     Given I login to REDCap with the user "Test_User4"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "Record Status Dashboard"
     And I click on the link labeled "1-1"
     When I click the bubble to select a record for the "Text Validation" longitudinal instrument on event "Event 2"
@@ -107,7 +107,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     # VERIFY - data entry user responds to the query
     Given I login to REDCap with the user "Test_User1"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "Record Status Dashboard"
     And I click on the link labeled "1-1"
     When I click the bubble to select a record for the "Text Validation" longitudinal instrument on event "Event 2"
@@ -126,7 +126,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     # VERIFY - data manager can view but not respond or change the plan
     Given I login to REDCap with the user "Test_User2"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "SDV Plan"
     Then I should see "Only monitors can change the SDV plan."
     And I logout
@@ -134,7 +134,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     # VERIFY - monitor accepts the response, verifies the field and completes SDV
     Given I login to REDCap with the user "Test_User4"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "Record Status Dashboard"
     And I click on the link labeled "1-1"
     When I click the bubble to select a record for the "Text Validation" longitudinal instrument on event "Event 2"
@@ -158,7 +158,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     # VERIFY - changing a verified value re-opens SDV (trigger: the changed field had been verified)
     Given I login to REDCap with the user "Test_User1"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "Record Status Dashboard"
     And I click on the link labeled "1-1"
     When I click the bubble to select a record for the "Text Validation" longitudinal instrument on event "Event 2"
@@ -172,7 +172,7 @@ Feature: E.129.200 - The system shall allow monitors to mark fields as requiring
     # VERIFY - not required and reopen require a reason
     Given I login to REDCap with the user "Test_User4"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.200"
+    And I click on the link labeled "E.131.200"
     And I click on the link labeled "Record Status Dashboard"
     And I click on the link labeled "1-1"
     When I click the bubble to select a record for the "Text Validation" longitudinal instrument on event "Event 2"

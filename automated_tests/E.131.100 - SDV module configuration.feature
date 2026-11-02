@@ -1,4 +1,4 @@
-Feature: E.129.100 - The system shall support enabling and configuring the Source Data Verification external module, validate its configuration, and record configuration changes to the module's View Logs page.
+Feature: E.131.100 - The system shall support enabling and configuring the Source Data Verification external module, validate its configuration, and record configuration changes to the module's View Logs page.
 
   As a REDCap administrator
   I want to configure Source Data Verification for a project
@@ -21,8 +21,8 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
     And I click on the button labeled "Enable"
     Then I should see "Source Data Verification - v1.0.0"
 
-  Scenario: E.129.100 - Enable and configure the module in a project
-    Given I create a new project named "E.129.100" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
+  Scenario: E.131.100 - Enable and configure the module in a project
+    Given I create a new project named "E.131.100" by clicking on "New Project" in the menu bar, selecting "Practice / Just for fun" from the dropdown, choosing file "fixtures/cdisc_files/ProjectTypes/RepeatingEvents_DoubleArm_withDAGs.xml", and clicking the "Create Project" button
     And I click on the second link labeled "Manage"
     Then I should see "External Modules - Project Module Manager"
     When I click on the button labeled "Enable a module"
@@ -68,7 +68,7 @@ Feature: E.129.100 - The system shall support enabling and configuring the Sourc
     # VERIFY - SDV links are shown to users with an SDV role
     Given I login to REDCap with the user "Test_User4"
     When I click on the link labeled "My Projects"
-    And I click on the link labeled "E.129.100"
+    And I click on the link labeled "E.131.100"
     Then I should see a link labeled "SDV Dashboard"
     And I should see a link labeled "SDV Plan"
     When I click on the link labeled "SDV Plan"
